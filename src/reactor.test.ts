@@ -81,6 +81,20 @@ describe('DatabaseReactor', () => {
         expect(callback).toHaveBeenCalledTimes(2);
     });
 
+    it('subscribe computes dependent expression for notifications', () => {
+        const reactor = new Reactor();
+        const callback = vi.fn();
+        const depFunc = (db: Database, arg) => db.spyResult(['base', arg]) + 1;
+
+        reactor.set(['base', 'key'], 10);
+        reactor.subscribe([depFunc, 'key'], callback);
+
+        reactor.set(['base', 'key'], 20);
+        reactor.flushNotifications();
+
+        expect(callback).toHaveBeenCalledTimes(1);
+    });
+
     it('callbacks are not called until flushNotifications', () => {
         const reactor = new Reactor();
         const callback = vi.fn();

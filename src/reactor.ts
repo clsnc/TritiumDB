@@ -38,6 +38,9 @@ export class Reactor {
         // Make sure the expression is represented as an immutable List
         const immExpr: ImmExpr = List(expr);
 
+        // Get the result. The result won't be used, but it any dependencies to be established for expressions with function predicates.
+        this.db.getResult(immExpr)
+
         // Get or create the callbacks Set
         let exprCallbacks = this.subscribers.get(immExpr);
         if(!exprCallbacks) {
