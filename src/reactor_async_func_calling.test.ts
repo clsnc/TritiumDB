@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Reactor, AsyncCallStatus, asyncCallResult, asyncCallStatus } from './reactor';
+import { Reactor } from './reactor';
+import { asyncCallResult, AsyncCallStatus, asyncCallStatus } from './async';
 
 type Deferred<T> = {
   promise: Promise<T>;

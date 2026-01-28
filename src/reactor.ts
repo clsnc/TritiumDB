@@ -1,5 +1,6 @@
 import { List, Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database, ListyExpr, ImmExpr, Value} from './database';
+import { ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallStatus } from "./async";
 
 export class Reactor {
     private db: Database;
@@ -88,24 +89,4 @@ export class Reactor {
         }
         this.invalidatedExprsPendingSubscriberNotifications.clear();
     }
-}
-
-// Internal predicates for representing async function call statuses
-const ASYNC_CALL_STATUS_INTERNAL_PRED = {}
-const ASYNC_CALL_RESULT_INTERNAL_PRED = {}
-
-// Externally-facing async function call statuses
-export enum AsyncCallStatus {
-    Complete = "Complete",
-    Executing = "Executing",
-    NotStarted = "NotStarted"
-}
-
-export function asyncCallStatus<T extends (...args: any[]) => Promise<any>>(db: Database, func: T, ...args: Parameters<T>): AsyncCallStatus {
-    // Return whatever status is stored unless it is undefined. In that case, return that the call has not been started.
-    return db.spyResult([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args]) as AsyncCallStatus.Complete | AsyncCallStatus.Executing | undefined ?? AsyncCallStatus.NotStarted
-}
-
-export function asyncCallResult<T extends (...args: any[]) => Promise<any>>(db: Database, func: T, ...args: Parameters<T>): Awaited<ReturnType<T>> | undefined {
-    return db.spyResult([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args]) as Awaited<ReturnType<T>> | undefined
 }
