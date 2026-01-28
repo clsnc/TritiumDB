@@ -17,6 +17,23 @@ export class Reactor {
         affectedExprs.forEach(expr => this.invalidatedExprsPendingSubscriberNotifications.add(expr));
     }
 
+    ensureAsyncRun<T extends (...args: any[]) => Promise<any>>(func: T, ...args: Parameters<T>): void {
+        // If a call has not already been initiated, initiate it
+        const currStatus = this.db.getResult([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args])
+        if (currStatus === undefined) {
+            // Set the executing status immediately
+            this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Executing)
+
+            // Initiate the call and set a callback
+            func(...args).then(retVal => {
+                // Set the return value and update the call status in the database
+                this.set([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], retVal)
+                this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
+                this.flushNotifications()
+            })
+        }
+    }
+
     subscribe(expr: ListyExpr, callback: () => void): () => void {
         // Make sure the expression is represented as an immutable List
         const immExpr: ImmExpr = List(expr);
@@ -68,4 +85,24 @@ export class Reactor {
         }
         this.invalidatedExprsPendingSubscriberNotifications.clear();
     }
+}
+
+// Internal predicates for representing async function call statuses
+const ASYNC_CALL_STATUS_INTERNAL_PRED = {}
+const ASYNC_CALL_RESULT_INTERNAL_PRED = {}
+
+// Externally-facing async function call statuses
+export enum AsyncCallStatus {
+    Complete = "Complete",
+    Executing = "Executing",
+    NotStarted = "NotStarted"
+}
+
+export function asyncCallStatus<T extends (...args: any[]) => Promise<any>>(db: Database, func: T, ...args: Parameters<T>): AsyncCallStatus {
+    // Return whatever status is stored unless it is undefined. In that case, return that the call has not been started.
+    return db.spyResult([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args]) as AsyncCallStatus.Complete | AsyncCallStatus.Executing | undefined ?? AsyncCallStatus.NotStarted
+}
+
+export function asyncCallResult<T extends (...args: any[]) => Promise<any>>(db: Database, func: T, ...args: Parameters<T>): Awaited<ReturnType<T>> | undefined {
+    return db.spyResult([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args]) as Awaited<ReturnType<T>> | undefined
 }
