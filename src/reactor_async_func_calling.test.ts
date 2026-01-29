@@ -1,6 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Database } from './database';
 import { Reactor } from './reactor';
-import { asyncCallResult, AsyncCallStatus, asyncCallStatus } from './async';
+import {
+  ASYNC_CALL_RESULT_INTERNAL_PRED,
+  ASYNC_CALL_STATUS_INTERNAL_PRED,
+  asyncCallResult,
+  AsyncCallStatus,
+  asyncCallStatus,
+  AsyncCallIncompleteError,
+  resultIsReady,
+} from './async';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -66,5 +75,72 @@ describe('Reactor async function calling', () => {
     expect(resultCallback).toHaveBeenCalledTimes(1);
     expect(reactor.getResult([asyncCallStatus, asyncFunc])).toBe(AsyncCallStatus.Complete);
     expect(reactor.getResult([asyncCallResult, asyncFunc])).toBe(42);
+  });
+
+  it('spyAsyncEffectResult throws until async result is ready', () => {
+    const db = new Database();
+    const asyncFunc = vi.fn(async (value: string) => `value-${value}`);
+
+    const effectResultExpr = [ASYNC_CALL_RESULT_INTERNAL_PRED, asyncFunc, 'alpha'];
+    const effectStatusExpr = [ASYNC_CALL_STATUS_INTERNAL_PRED, asyncFunc, 'alpha'];
+    const outerExpr = [(db: Database) => db.spyAsyncEffectResult([asyncFunc, 'alpha'])];
+
+    let thrownError;
+    try {
+      db.getResult(outerExpr);
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(thrownError).toBeInstanceOf(AsyncCallIncompleteError);
+
+    const readyDb = db
+      .with(effectResultExpr, 'resolved')
+      .with(effectStatusExpr, AsyncCallStatus.Complete);
+
+    const result = readyDb.getResult(outerExpr);
+    expect(result).toBe('resolved');
+  });
+
+  it('resultIsReady reflects readiness through nested dependencies', () => {
+    const db = new Database();
+    const asyncFunc = vi.fn(async (value: string) => `value-${value}`);
+
+    const effectResultExpr = [ASYNC_CALL_RESULT_INTERNAL_PRED, asyncFunc, 'beta'];
+    const effectStatusExpr = [ASYNC_CALL_STATUS_INTERNAL_PRED, asyncFunc, 'beta'];
+
+    const inner = (db: Database) => db.spyAsyncEffectResult([asyncFunc, 'beta']);
+    const outer = (db: Database) => `outer-${db.spyResult([inner])}`;
+
+    expect(db.getResult([resultIsReady, outer])).toBe(false);
+
+    const readyDb = db
+      .with(effectResultExpr, 'resolved')
+      .with(effectStatusExpr, AsyncCallStatus.Complete);
+
+    expect(readyDb.getResult([resultIsReady, outer])).toBe(true);
+    expect(readyDb.getResult([outer])).toBe('outer-resolved');
+  });
+
+  it('resultIsReady works with Reactor async calls', async () => {
+    const reactor = new Reactor();
+    const deferred = createDeferred<string>();
+    const asyncFunc = vi.fn((value: string) => deferred.promise);
+
+    const inner = (db: Database) => db.spyAsyncEffectResult([asyncFunc, 'gamma']);
+    const outer = (db: Database) => `outer-${db.spyResult([inner])}`;
+
+    expect(reactor.getResult([resultIsReady, outer])).toBe(false);
+
+    reactor.ensureAsyncRun(asyncFunc, 'gamma');
+
+    expect(reactor.getResult([resultIsReady, outer])).toBe(false);
+
+    deferred.resolve('done');
+    await deferred.promise;
+    await Promise.resolve();
+
+    expect(reactor.getResult([resultIsReady, outer])).toBe(true);
+    expect(reactor.getResult([outer])).toBe('outer-done');
   });
 });

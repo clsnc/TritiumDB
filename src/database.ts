@@ -1,4 +1,5 @@
 import { List as ImmList, Map as ImmMap, Set as ImmSet, Record } from "immutable"
+import { AsyncCallIncompleteError, asyncCallResult, AsyncCallStatus, asyncCallStatus } from "./async"
 
 type Function = (...args: any[]) => any
 
@@ -216,6 +217,20 @@ export class Database {
         }
 
         return affectedExprs
+    }
+
+    spyAsyncEffectResult<Pred extends (...args: any[]) => Promise<any>>(expr: Parameters<Pred> extends [any, ...infer Rest] ? [Pred, ...Rest] : [Pred]): Awaited<ReturnType<Pred>>
+    spyAsyncEffectResult(expr: [any, ...any[]]): any
+    spyAsyncEffectResult(expr: [any, ...any[]]): any {
+        const callStatus = this.spyResult([asyncCallStatus, ...expr])
+        if(callStatus === AsyncCallStatus.Complete) {
+            // If the async call is complete, return its return value
+            return this.spyResult([asyncCallResult, ...expr])
+        } else {
+            // If the async call is incomplete, throw an error
+            const immExpr = ImmList(expr)
+            throw new AsyncCallIncompleteError(immExpr)
+        }
     }
 
     spyResult<Pred extends Function>(expr: Parameters<Pred> extends [any, ...infer Rest] ? [Pred, ...Rest] : [Pred]): ReturnType<Pred>
