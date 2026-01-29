@@ -143,4 +143,51 @@ describe('Reactor async function calling', () => {
     expect(reactor.getResult([resultIsReady, outer])).toBe(true);
     expect(reactor.getResult([outer])).toBe('outer-done');
   });
+
+  it('getResultPromise resolves immediately for sync values', async () => {
+    const reactor = new Reactor();
+    reactor.set(['sync', 'key'], 'value');
+
+    const result = await reactor.getResultPromise(['sync', 'key']);
+    expect(result).toBe('value');
+  });
+
+  it('getResultPromise waits for async dependencies', async () => {
+    const reactor = new Reactor();
+    const deferred = createDeferred<string>();
+    const asyncFunc = vi.fn((value: string) => deferred.promise);
+
+    const inner = (db: Database) => db.spyAsyncEffectResult([asyncFunc, 'delta']);
+    const outer = (db: Database) => `outer-${db.spyResult([inner])}`;
+
+    const promise = reactor.getResultPromise([outer]);
+
+    reactor.ensureAsyncRun(asyncFunc, 'delta');
+
+    let resolved = false;
+    promise.then(() => {
+      resolved = true;
+    });
+
+    await Promise.resolve(); // Flush microtasks to confirm the promise is still pending.
+    expect(resolved).toBe(false);
+
+    deferred.resolve('done');
+    await deferred.promise;
+    await Promise.resolve(); // Flush microtasks so the async .then handler runs.
+    expect(resolved).toBe(true);
+
+    expect(await promise).toBe('outer-done');
+  });
+
+  it('getResultPromise rejects on synchronous errors', async () => {
+    const reactor = new Reactor();
+    const err = new Error('boom');
+    const throwingFunc = () => {
+      throw err;
+    };
+
+    const promise = reactor.getResultPromise([throwingFunc]);
+    await expect(promise).rejects.toBe(err);
+  });
 });

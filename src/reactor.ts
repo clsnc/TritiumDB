@@ -1,6 +1,6 @@
 import { List, Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database, ListyExpr, ImmExpr, Value} from './database';
-import { ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallStatus } from "./async";
+import { ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallStatus, resultIsReady } from "./async";
 
 export class Reactor {
     private db: Database;
@@ -67,6 +67,46 @@ export class Reactor {
 
     getResult(expr: ListyExpr) {
         return this.db.getResult(expr);
+    }
+
+    getResultPromise(expr: ListyExpr): Promise<Value> {
+        // Figure out whether the expression result is already ready
+        const readyExpr: ListyExpr = [resultIsReady, ...expr]
+        let isReady: boolean
+        try {
+            isReady = this.getResult(readyExpr)
+        } catch (err) {
+            // If some error is thrown while computing, return a rejected promise
+            return Promise.reject(err)
+        }
+
+        if (isReady) {
+            // If the result is ready, return a resolved promise
+            return Promise.resolve(this.getResult(expr))
+        } else {
+            // If the result is not ready, return an unresolved promise
+            return new Promise((resolve, reject) => {
+                // Subscribe the readiness of this expression
+                const unsubscribe = this.subscribe(readyExpr, () => {
+                    // When the readiness result changes, get it
+                    let nowReady: boolean
+                    try {
+                        nowReady = this.getResult(readyExpr)
+                    } catch (err) {
+                        // If getting the readiness result fails, reject the promise and unsubscribe from the readiness expression
+                        unsubscribe()
+                        reject(err)
+                        return
+                    }
+
+                    // If the readiness result says the expression is ready, resolve the promise and unsubscribe
+                    if (nowReady) {
+                        unsubscribe()
+                        resolve(this.db.getResult(expr))
+                    }
+                })
+            })
+        }
     }
 
     // TODO: Add testing for this
