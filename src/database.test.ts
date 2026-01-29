@@ -926,4 +926,132 @@ describe('ReactiveDatabase', () => {
     expect(db2.getResult(expr)).toBe(1)
     expect(db3.getResult(expr)).toBe(2)
   })
+
+  it('caches and rethrows the same error instance', () => {
+    const db = new Database()
+    const throwingFunc = vi.fn(() => {
+      throw new Error('boom')
+    })
+
+    const expr = ImmList([throwingFunc])
+
+    let firstError
+    try {
+      db.getResult(expr)
+    } catch (err) {
+      firstError = err
+    }
+
+    let secondError
+    try {
+      db.getResult(expr)
+    } catch (err) {
+      secondError = err
+    }
+
+    expect(firstError.message).toEqual('boom')
+    expect(secondError).toBe(firstError)
+    expect(throwingFunc).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates cached errors when dependencies change', () => {
+    const db = new Database()
+    const baseExpr = ImmList(['base'])
+    const throwingFunc = vi.fn((db: Database) => {
+      const value = db.spyResult(baseExpr)
+      if (value === 'bad') {
+        throw new Error('bad')
+      }
+      return `ok-${value}`
+    })
+
+    const expr = ImmList([throwingFunc])
+    const db2 = db.with(baseExpr, 'bad')
+
+    let firstError
+    try {
+      db2.getResult(expr)
+    } catch (err) {
+      firstError = err
+    }
+
+    let secondError
+    try {
+      db2.getResult(expr)
+    } catch (err) {
+      secondError = err
+    }
+
+    expect(firstError).toBeInstanceOf(Error)
+    expect(secondError).toBe(firstError)
+    expect(throwingFunc).toHaveBeenCalledTimes(1)
+
+    const db3 = db2.with(baseExpr, 'good')
+    expect(db3.getResult(expr)).toBe('ok-good')
+    expect(throwingFunc).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows dependent predicates to catch errors', () => {
+    const db = new Database()
+    const baseExpr = ImmList(['base'])
+    const innerError = new Error('inner')
+    const innerFunc = vi.fn((db: Database) => {
+      const value = db.spyResult(baseExpr)
+      if (value === 'bad') {
+        throw innerError
+      }
+      return `inner-${value}`
+    })
+    const outerFunc = vi.fn((db: Database) => {
+      try {
+        return `outer-${db.spyResult([innerFunc])}`
+      } catch (err) {
+        return 'outer-fallback'
+      }
+    })
+
+    const db2 = db.with(baseExpr, 'good')
+    expect(db2.getResult([outerFunc])).toBe('outer-inner-good')
+
+    const db3 = db2.with(baseExpr, 'bad')
+    expect(db3.getResult([outerFunc])).toBe('outer-fallback')
+    expect(innerFunc).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates errors through dependent expressions', () => {
+    const rdb = new Database()
+    const baseExpr = ImmList(['base'])
+    const innerError = new Error('inner')
+    const innerFunc = vi.fn((db: Database) => {
+      const value = db.spyResult(baseExpr)
+      if (value === 'bad') {
+        throw innerError
+      }
+      return `inner-${value}`
+    })
+    const outerFunc = vi.fn((db: Database) => `outer-${db.spyResult([innerFunc])}`)
+
+    let db = rdb.with(baseExpr, 'bad')
+    let caughtError
+    try {
+      db.getResult([outerFunc])
+    } catch (err) {
+      caughtError = err
+    }
+
+    expect(caughtError).toBe(innerError)
+
+    let cachedError
+    try {
+      db.getResult([outerFunc])
+    } catch (err) {
+      cachedError = err
+    }
+
+    expect(cachedError).toBe(innerError)
+
+    db = db.with(baseExpr, 'good')
+    expect(db.getResult([outerFunc])).toBe('outer-inner-good')
+    expect(innerFunc).toHaveBeenCalledTimes(2)
+  })
 })

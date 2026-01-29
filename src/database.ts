@@ -7,6 +7,8 @@ export type ImmExpr = ImmList<Value>
 export type ArrExpr = Value[]
 export type ListyExpr = ImmExpr | ArrExpr
 
+const NO_CACHED_VALUE = {}
+
 export class DerivativeId extends Record({
     creatingExpr: null,
     uniqueKey: null
@@ -29,17 +31,20 @@ export class Database {
     protected currentlyComputingExprs: ImmSet<ImmExpr>
     protected currentDeepestComputingExpr: ImmExpr | null
     protected exprToCachedResult: ImmMap<ImmExpr, Value>
+    protected exprToCachedError: ImmMap<ImmExpr, Error>
     protected exprToContributorExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>>
     protected exprToDependentExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>>
 
     constructor(
         exprToCachedResult: ImmMap<ImmExpr, Value> = ImmMap<ImmExpr, Value>(),
+        exprToCachedError: ImmMap<ImmExpr, Error> = ImmMap<ImmExpr, Error>(),
         exprToContributorExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>> = ImmMap<ImmExpr, ImmSet<ImmExpr>>(),
         exprToDependentExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>> = ImmMap<ImmExpr, ImmSet<ImmExpr>>()
     ) {
         this.cascadingPredicateAffectedExprsDuringSet = null
         this.currentlyComputingExprs = ImmSet<ImmExpr>()
         this.currentDeepestComputingExpr = null
+        this.exprToCachedError = exprToCachedError
         this.exprToCachedResult = exprToCachedResult
         this.exprToContributorExprs = exprToContributorExprs
         this.exprToDependentExprs = exprToDependentExprs
@@ -75,8 +80,9 @@ export class Database {
     }
 
     protected invalidateSingleExprResult(expr: ImmExpr): void {
-        // Remove the cached result for this expression
+        // Remove the cached result or error for this expression
         this.exprToCachedResult = this.exprToCachedResult.delete(expr)
+        this.exprToCachedError = this.exprToCachedError.delete(expr)
 
         // Clear dependency tracking for this expression
         this.clearExprDependencies(expr)
@@ -106,11 +112,18 @@ export class Database {
 
     protected getResultFromImmExpr(expr: ImmExpr): Value {
         // If there is already a cached result for this expression, return it
-        if (this.exprToCachedResult.has(expr)) {
-            return this.exprToCachedResult.get(expr)
+        const cachedResult = this.exprToCachedResult.get(expr, NO_CACHED_VALUE)
+        if(cachedResult !== NO_CACHED_VALUE) {
+            return cachedResult
         }
 
-        // If there is no cached result but the predicate is a function, compute the result and return that
+        // If there is no cached result but there is a cached error, throw that
+        const cachedError = this.exprToCachedError.get(expr, NO_CACHED_VALUE)
+        if(cachedError !== NO_CACHED_VALUE) {
+            throw cachedError
+        }
+
+        // If there is no cached result or error but the predicate is a function, compute the result and return that
         const pred = expr.get(0)
         if (typeof pred === "function") {
             return this.updateExprCacheAndGetResult(expr)
@@ -237,10 +250,18 @@ export class Database {
            recursively compute the same expression while calling the function */
         this.currentlyComputingExprs = this.currentlyComputingExprs.add(expr)
 
-        // Compute the result
+        // Compute the result or error
         const func = expr.get(0)
         const args = expr.shift()
-        const result = func(this, ...args)
+        let gotReturn: boolean
+        let result
+        try {
+            result = func(this, ...args)
+            gotReturn = true
+        } catch(err) {
+            result = err
+            gotReturn = false
+        }
 
         /* Because the function call is done, we can unmark this key as
            currently computing */
@@ -249,10 +270,15 @@ export class Database {
         // Restore the previous calling key
         this.setDeepestComputingExpr(prevCallingKey)
 
-        // Update the cache with the computed result
-        this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
-
-        return result
+        if(gotReturn) {
+            // If there was no error, update the cache with and return the result
+            this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
+            return result
+        } else {
+            // If there was an error, update the cache with and return it
+            this.exprToCachedError = this.exprToCachedError.set(expr, result)
+            throw result
+        }
     }
 
     with(expr: ListyExpr, result: Value): Database {
@@ -264,6 +290,7 @@ export class Database {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
             this.exprToCachedResult,
+            this.exprToCachedError,
             this.exprToContributorExprs,
             this.exprToDependentExprs
         )
