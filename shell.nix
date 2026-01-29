@@ -9,5 +9,6 @@ pkgs.mkShell {
   packages = with pkgs; [
     nodejs
     unstable.opencode
+    wl-clipboard # Necessary for OpenCode to have clipboard access
   ];
 }
