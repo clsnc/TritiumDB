@@ -218,4 +218,35 @@ describe('Reactor async function calling', () => {
     const promise = reactor.getResultPromise([throwingFunc]);
     await expect(promise).rejects.toBe(err);
   });
+
+  it('getEnsuredResultPromise starts multiple async dependencies', async () => {
+    const reactor = new Reactor();
+    const deferredA = createDeferred<string>();
+    const deferredB = createDeferred<string>();
+    const asyncFuncA = vi.fn((value: string) => deferredA.promise);
+    const asyncFuncB = vi.fn((value: string) => deferredB.promise);
+
+    const innerA = (db: Database) => db.spyAsyncEffectResult([asyncFuncA, 'zeta']);
+    const innerB = (db: Database) => db.spyAsyncEffectResult([asyncFuncB, 'eta']);
+    const outer = (db: Database) => {
+      const valueA = db.spyResult([innerA]);
+      const valueB = db.spyResult([innerB]);
+      return `outer-${valueA}-${valueB}`;
+    };
+
+    expect(asyncFuncA).toHaveBeenCalledTimes(0);
+    expect(asyncFuncB).toHaveBeenCalledTimes(0);
+
+    const promise = reactor.getEnsuredResultPromise([outer]);
+
+    deferredA.resolve('done-a');
+    deferredB.resolve('done-b');
+    await deferredA.promise;
+    await deferredB.promise;
+    await Promise.resolve();
+
+    await expect(promise).resolves.toBe('outer-done-a-done-b');
+    expect(asyncFuncA).toHaveBeenCalledTimes(1);
+    expect(asyncFuncB).toHaveBeenCalledTimes(1);
+  });
 });

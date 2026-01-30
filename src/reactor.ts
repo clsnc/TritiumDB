@@ -1,6 +1,6 @@
 import { List, Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database, ListyExpr, ImmExpr, Value} from './database';
-import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallStatus, resultIsReady } from "./async";
+import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallIncompleteError, AsyncCallStatus, resultIsReady } from "./async";
 
 export class Reactor {
     private db: Database;
@@ -74,6 +74,28 @@ export class Reactor {
                 exprCallbacks.delete(callback)
             }
         };
+    }
+
+    getEnsuredResultPromise(expr: ListyExpr): Promise<Value> {
+        // Initiate an async function to ensure async runs until the result can finish computing
+        const ensureAllRuns = async () => {
+            // As long as the expression is not ready, find the next incomplete async expression and ensure it is being run
+            const readyExpr = [resultIsReady, ...expr]
+            while(!this.getResult(readyExpr)) {
+                try {
+                    this.getResult(expr)
+                } catch(err) {
+                    // Awaiting prevents the loop from repeatedly ensuring the same dependency
+                    // Because the result is considered ready, the only error that should ever be thrown is one indicating an incomplete async call
+                    // TODO: Fix type error below
+                    // @ts-expect-error
+                    await this.ensureAsyncRun(...(err as AsyncCallIncompleteError).incompleteExpr)
+                }
+            }
+        }
+        ensureAllRuns()
+
+        return this.getResultPromise(expr)
     }
 
     getResult(expr: ListyExpr) {
