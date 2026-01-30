@@ -39,12 +39,9 @@ export function resultIsReady(db: Database, ...expr: [any, ...any[]]): any {
         if(err instanceof AsyncCallIncompleteError) {
             // If getting the expression throws an error indicating that it depends on an incomplete async call, return that the result is not ready
             return false
-        } else {
-            // If some other error is thrown, rethrow it. That should not be handled here.
-            throw err
         }
     }
 
-    // If no error has been thrown, the result is ready
+    // If some other error is thrown or the result is returned without error, the result is ready
     return true
 }

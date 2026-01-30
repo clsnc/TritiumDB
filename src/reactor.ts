@@ -72,37 +72,37 @@ export class Reactor {
     getResultPromise(expr: ListyExpr): Promise<Value> {
         // Figure out whether the expression result is already ready
         const readyExpr: ListyExpr = [resultIsReady, ...expr]
-        let isReady: boolean
-        try {
-            isReady = this.getResult(readyExpr)
-        } catch (err) {
-            // If some error is thrown while computing, return a rejected promise
-            return Promise.reject(err)
-        }
+        const isReady = this.getResult(readyExpr)
 
         if (isReady) {
-            // If the result is ready, return a resolved promise
-            return Promise.resolve(this.getResult(expr))
+            try {
+                // If the result is ready and there is a return value, return a resolved promise
+                return Promise.resolve(this.getResult(expr))
+            } catch(err) {
+                // If the result is ready but it is a thrown error, return a rejected promise
+                return Promise.reject(err)
+            }
         } else {
             // If the result is not ready, return an unresolved promise
             return new Promise((resolve, reject) => {
                 // Subscribe the readiness of this expression
                 const unsubscribe = this.subscribe(readyExpr, () => {
                     // When the readiness result changes, get it
-                    let nowReady: boolean
-                    try {
-                        nowReady = this.getResult(readyExpr)
-                    } catch (err) {
-                        // If getting the readiness result fails, reject the promise and unsubscribe from the readiness expression
-                        unsubscribe()
-                        reject(err)
-                        return
-                    }
+                    const nowReady = this.getResult(readyExpr)
 
-                    // If the readiness result says the expression is ready, resolve the promise and unsubscribe
-                    if (nowReady) {
+                    // If the result is now ready, return it or throw the error
+                    if(nowReady) {
+                        try {
+                            // If there is a return value, resolve the promise
+                            resolve(this.getResult(expr))
+                        } catch (err) {
+                            // If getting the expression throws an error, reject the promise
+                            reject(err)
+                            return
+                        }
+
+                        // Since the promise has either been resolved or rejected, we can unsubscribe
                         unsubscribe()
-                        resolve(this.db.getResult(expr))
                     }
                 })
             })

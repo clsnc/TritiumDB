@@ -144,6 +144,15 @@ describe('Reactor async function calling', () => {
     expect(reactor.getResult([outer])).toBe('outer-done');
   });
 
+  it('resultIsReady returns true on non-async errors', () => {
+    const db = new Database();
+    const throwingFunc = () => {
+      throw new Error('sync error');
+    };
+
+    expect(db.getResult([resultIsReady, throwingFunc])).toBe(true);
+  });
+
   it('getResultPromise resolves immediately for sync values', async () => {
     const reactor = new Reactor();
     reactor.set(['sync', 'key'], 'value');
