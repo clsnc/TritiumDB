@@ -1,8 +1,9 @@
 import { Database, ImmExpr } from "./database"
 
-// Internal predicates for representing async function call statuses
+// Internal predicates for representing async data
 export const ASYNC_CALL_STATUS_INTERNAL_PRED = {}
 export const ASYNC_CALL_RESULT_INTERNAL_PRED = {}
+export const ASYNC_CALL_PROMISE_INTERNAL_PRED = {}
 
 // Externally-facing async function call statuses
 export enum AsyncCallStatus {

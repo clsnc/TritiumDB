@@ -48,6 +48,25 @@ describe('Reactor async function calling', () => {
     expect(reactor.getResult([asyncCallResult, asyncFunc, 'arg'])).toBe('result');
   });
 
+  it('ensureAsyncRun returns a shared promise for the async call', async () => {
+    const reactor = new Reactor();
+    const deferred = createDeferred<string>();
+    const asyncFunc = vi.fn((value: string) => deferred.promise);
+
+    const firstPromise = reactor.ensureAsyncRun(asyncFunc, 'arg');
+    const secondPromise = reactor.ensureAsyncRun(asyncFunc, 'arg');
+
+    expect(asyncFunc).toHaveBeenCalledTimes(1);
+    expect(firstPromise).toBeInstanceOf(Promise);
+    expect(secondPromise).toBe(firstPromise);
+
+    deferred.resolve('result');
+    await deferred.promise;
+    await Promise.resolve();
+
+    await expect(firstPromise).resolves.toBe('result');
+  });
+
   it('notifies subscribers when async status and result change', async () => {
     const reactor = new Reactor();
     const deferred = createDeferred<number>();

@@ -1,6 +1,6 @@
 import { List, Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database, ListyExpr, ImmExpr, Value} from './database';
-import { ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallStatus, resultIsReady } from "./async";
+import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallStatus, resultIsReady } from "./async";
 
 export class Reactor {
     private db: Database;
@@ -18,20 +18,31 @@ export class Reactor {
         affectedExprs.forEach(expr => this.invalidatedExprsPendingSubscriberNotifications.add(expr));
     }
 
-    ensureAsyncRun<T extends (...args: any[]) => Promise<any>>(func: T, ...args: Parameters<T>): void {
+    ensureAsyncRun<T extends (...args: any[]) => Promise<any>>(func: T, ...args: Parameters<T>): ReturnType<T> {
         // If a call has not already been initiated, initiate it
         const currStatus = this.db.getResult([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args])
         if (currStatus === undefined) {
             // Set the executing status immediately
             this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Executing)
+            
+            // Call the function and get a promise for the result
+            const promise = func(...args) as ReturnType<T>
+
+            // Store the promise so it can be retrieved by later calls of this function
+            this.set([ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args], promise)
 
             // Initiate the call and set a callback
-            func(...args).then(retVal => {
+            promise.then(retVal => {
                 // Set the return value and update the call status in the database
                 this.set([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], retVal)
                 this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
                 this.flushNotifications()
             })
+
+            return promise
+        } else {
+            // If the async call has already been initiated, return the existing promise
+            return this.getResult([ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args])
         }
     }
 
