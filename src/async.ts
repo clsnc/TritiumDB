@@ -4,6 +4,7 @@ import { Database, ImmExpr } from "./database"
 export const ASYNC_CALL_STATUS_INTERNAL_PRED = {}
 export const ASYNC_CALL_RESULT_INTERNAL_PRED = {}
 export const ASYNC_CALL_PROMISE_INTERNAL_PRED = {}
+export const EXPR_PROMISE_INTERNAL_PRED = {}
 
 // Externally-facing async function call statuses
 export enum AsyncCallStatus {

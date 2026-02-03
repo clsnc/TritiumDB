@@ -180,6 +180,19 @@ describe('Reactor async function calling', () => {
     expect(result).toBe('value');
   });
 
+  it('getResultPromise returns shared promise for repeated calls', async () => {
+    const reactor = new Reactor();
+    const deferred = createDeferred<string>();
+    const asyncFunc = vi.fn((value: string) => deferred.promise);
+
+    const inner = (db: Database) => db.spyAsyncEffectResult([asyncFunc, 'epsilon']);
+
+    const firstPromise = reactor.getResultPromise([inner]);
+    const secondPromise = reactor.getResultPromise([inner]);
+
+    expect(firstPromise).toBe(secondPromise);
+  });
+
   it('getResultPromise waits for async dependencies', async () => {
     const reactor = new Reactor();
     const deferred = createDeferred<string>();

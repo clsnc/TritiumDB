@@ -1,6 +1,6 @@
 import { List, Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database, ListyExpr, ImmExpr, Value} from './database';
-import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallIncompleteError, AsyncCallStatus, resultIsReady } from "./async";
+import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallIncompleteError, AsyncCallStatus, EXPR_PROMISE_INTERNAL_PRED, resultIsReady } from "./async";
 
 export class Reactor {
     private db: Database;
@@ -103,42 +103,56 @@ export class Reactor {
     }
 
     getResultPromise(expr: ListyExpr): Promise<Value> {
-        // Figure out whether the expression result is already ready
-        const readyExpr: ListyExpr = [resultIsReady, ...expr]
-        const isReady = this.getResult(readyExpr)
-
-        if (isReady) {
-            try {
-                // If the result is ready and there is a return value, return a resolved promise
-                return Promise.resolve(this.getResult(expr))
-            } catch(err) {
-                // If the result is ready but it is a thrown error, return a rejected promise
-                return Promise.reject(err)
-            }
+        // If there is already a stored promise for this result, return it. Otherwise, create one, store it, and return it.
+        const storedPromiseExpr = [EXPR_PROMISE_INTERNAL_PRED, ...expr]
+        const storedPromise = this.getResult(storedPromiseExpr)
+        if(storedPromise) {
+            return storedPromise
         } else {
-            // If the result is not ready, return an unresolved promise
-            return new Promise((resolve, reject) => {
-                // Subscribe the readiness of this expression
-                const unsubscribe = this.subscribe(readyExpr, () => {
-                    // When the readiness result changes, get it
-                    const nowReady = this.getResult(readyExpr)
+            let promise: Promise<Value>
 
-                    // If the result is now ready, return it or throw the error
-                    if(nowReady) {
-                        try {
-                            // If there is a return value, resolve the promise
-                            resolve(this.getResult(expr))
-                        } catch (err) {
-                            // If getting the expression throws an error, reject the promise
-                            reject(err)
-                            return
+            // Figure out whether the expression result is already ready
+            const readyExpr: ListyExpr = [resultIsReady, ...expr]
+            const isReady = this.getResult(readyExpr)
+
+            if (isReady) {
+                try {
+                    // If the result is ready and there is a return value, return a resolved promise
+                    promise = Promise.resolve(this.getResult(expr))
+                } catch(err) {
+                    // If the result is ready but it is a thrown error, return a rejected promise
+                    promise = Promise.reject(err)
+                }
+            } else {
+                // If the result is not ready, return an unresolved promise
+                promise = new Promise((resolve, reject) => {
+                    // Subscribe the readiness of this expression
+                    const unsubscribe = this.subscribe(readyExpr, () => {
+                        // When the readiness result changes, get it
+                        const nowReady = this.getResult(readyExpr)
+
+                        // If the result is now ready, return it or throw the error
+                        if(nowReady) {
+                            try {
+                                // If there is a return value, resolve the promise
+                                resolve(this.getResult(expr))
+                            } catch (err) {
+                                // If getting the expression throws an error, reject the promise
+                                reject(err)
+                                return
+                            }
+
+                            // Since the promise has either been resolved or rejected, we can unsubscribe
+                            unsubscribe()
                         }
-
-                        // Since the promise has either been resolved or rejected, we can unsubscribe
-                        unsubscribe()
-                    }
+                    })
                 })
-            })
+            }
+
+            // Record the promise to be returned by future calls
+            this.set(storedPromiseExpr, promise)
+
+            return promise
         }
     }
 
