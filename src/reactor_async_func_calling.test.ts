@@ -172,6 +172,19 @@ describe('Reactor async function calling', () => {
     expect(db.getResult([resultIsReady, throwingFunc])).toBe(true);
   });
 
+  it('rethrows errors from async dependencies', async () => {
+    const reactor = new Reactor();
+    const err = new Error('async boom');
+    const asyncFunc = vi.fn((value: string) => Promise.reject(err));
+
+    const inner = (db: Database) => db.spyAsyncEffectResult([asyncFunc, 'theta']);
+    const outer = (db: Database) => `outer-${db.spyResult([inner])}`;
+
+    await expect(reactor.getEnsuredResultPromise([outer])).rejects.toBe(err)
+    expect(reactor.getResult([resultIsReady, outer])).toBe(true);
+    expect(() => reactor.getResult([outer])).toThrow(err);
+  });
+
   it('getResultPromise resolves immediately for sync values', async () => {
     const reactor = new Reactor();
     reactor.set(['sync', 'key'], 'value');

@@ -31,13 +31,18 @@ export class Reactor {
             // Store the promise so it can be retrieved by later calls of this function
             this.set([ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args], promise)
 
-            // Initiate the call and set a callback
-            promise.then(retVal => {
-                // Set the return value and update the call status in the database
-                this.set([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], retVal)
-                this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
-                this.flushNotifications()
-            })
+            promise
+                .then(retVal => {
+                    // If the async call succeeds, record the return value and update the call status in the database
+                    this.set([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], retVal)
+                    this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
+                    this.flushNotifications()
+                }).catch(err => {
+                    // If the async call throws an error, record the thrown error and update the call status in the database
+                    this.setError([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], err)
+                    this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
+                    this.flushNotifications()
+                }) 
 
             return promise
         } else {
@@ -82,14 +87,19 @@ export class Reactor {
             // As long as the expression is not ready, find the next incomplete async expression and ensure it is being run
             const readyExpr = [resultIsReady, ...expr]
             while(!this.getResult(readyExpr)) {
+                /* Because the result isn't considered ready, the only error that should ever be thrown by getting the result 
+                   is one indicating an incomplete async call */
                 try {
                     this.getResult(expr)
                 } catch(err) {
                     // Awaiting prevents the loop from repeatedly ensuring the same dependency
-                    // Because the result is considered ready, the only error that should ever be thrown is one indicating an incomplete async call
-                    // TODO: Fix type error below
-                    // @ts-expect-error
-                    await this.ensureAsyncRun(...(err as AsyncCallIncompleteError).incompleteExpr)
+                    try {
+                        // TODO: Fix type error below
+                        // @ts-expect-error
+                        await this.ensureAsyncRun(...(err as AsyncCallIncompleteError).incompleteExpr)
+                    } catch(_) {
+                        // Nothing needs to be done here if the async call throws an error. How that is handled is up to the calling predicate function.
+                    }
                 }
             }
         }
