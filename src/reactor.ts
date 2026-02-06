@@ -165,6 +165,10 @@ export class Reactor {
         this.applyChangeFunc(() => this.db.withGetAffectedRels(expr, result))     
     }
 
+    setError(expr: ListyExpr, err: any): void {
+        this.applyChangeFunc(() => this.db.withErrorGetAffectedRels(expr, err))
+    }
+
     flushNotifications(): void {
         for (const affectedExpr of this.invalidatedExprsPendingSubscriberNotifications) {
             const callbacks = this.subscribers.get(affectedExpr);
