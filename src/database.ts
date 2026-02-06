@@ -105,10 +105,6 @@ export class Database {
         return discoveredExprs
     }
 
-    protected getOrThrowCachedResultFromImmExpr(expr: ImmExpr): Value {
-        
-    }
-
     getResult(expr: ListyExpr): Value {
         return this.getResultFromImmExpr(ImmList(expr))
     }
@@ -167,14 +163,14 @@ export class Database {
         // Set the result
         /* Any dependencies on this derivative expression should have been invalidated when the setting expression was, 
            so getting affected expressions shouldn't be significant waste of compute. */
-        this.setResultGetAffectedExprs(derivativeExpr, result)
+        this.setResultGetAffectedExprs(derivativeExpr, new ExpressionResult(result, true))
 
         // Mark the derivative expression as dependent on the currently computing expression
         this.addDependency(derivativeExpr, this.currentDeepestComputingExpr)
 
     }
 
-    protected setResultGetAffectedExprs(expr: ListyExpr, result: Value): ImmSet<ImmExpr> {
+    protected setResultGetAffectedExprs(expr: ListyExpr, result: ExpressionResult): ImmSet<ImmExpr> {
         const immExpr: ImmExpr = ImmList(expr)
         let affectedExprs = this.getAllDependentExprsIncludingSeed(immExpr)
         
@@ -184,7 +180,7 @@ export class Database {
         })
 
         // Set the result in the cache
-        this.exprToCachedResult = this.exprToCachedResult.set(immExpr, new ExpressionResult(result, true))
+        this.exprToCachedResult = this.exprToCachedResult.set(immExpr, result)
 
         // If this expression has a Cascading Predicate, set any consequences and keep track of affected expressions.
         /* This is done after affected expression invalidation to avoid invalidating expressions set as consequences. This is okay because consequences 
@@ -209,7 +205,8 @@ export class Database {
             }
 
             // Apply the predicate's setter function to set any consequences
-            pred.setter(this, immExpr, result)
+            // TODO: Properly handle any cases where this is an error result
+            pred.setter(this, immExpr, result.value)
 
             // If this predicate started a predicate cascade, record the affected expressions and remove the set for tracking them
             if(!alreadyInCascadingPredicateSet) {
@@ -307,7 +304,20 @@ export class Database {
         return this.withGetAffectedRels(expr, result)[0]
     }
 
-    withGetAffectedRels(expr: ListyExpr, result: Value): [Database, ImmSet<ImmExpr>] {
+    withError(expr: ListyExpr, err: Value): Database {
+        // Return just the new database
+        return this.withErrorGetAffectedRels(expr, err)[0]
+    }
+
+    withErrorGetAffectedRels(expr: ListyExpr, err: Value): [Database, ImmSet<ImmExpr>] {
+        return this.withResultGetAffectedRels(expr, new ExpressionResult(err, false))
+    }
+
+    withGetAffectedRels(expr, resVal: Value): [Database, ImmSet<ImmExpr>] {
+        return this.withResultGetAffectedRels(expr, new ExpressionResult(resVal, true))
+    }
+
+    protected withResultGetAffectedRels(expr: ListyExpr, result: ExpressionResult): [Database, ImmSet<ImmExpr>] {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
             this.exprToCachedResult,
