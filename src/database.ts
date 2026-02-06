@@ -8,8 +8,6 @@ export type ImmExpr = ImmList<Value>
 export type ArrExpr = Value[]
 export type ListyExpr = ImmExpr | ArrExpr
 
-const NO_CACHED_VALUE = {}
-
 export class DerivativeId extends Record({
     creatingExpr: null,
     uniqueKey: null
@@ -27,25 +25,26 @@ export class CascadingPredicate {
     }
 }
 
+class ExpressionResult {
+    constructor(readonly value: Value | Error, readonly isReturnValue: boolean) {}
+}
+
 export class Database {
     protected cascadingPredicateAffectedExprsDuringSet: ImmSet<ImmExpr> | null
     protected currentlyComputingExprs: ImmSet<ImmExpr>
     protected currentDeepestComputingExpr: ImmExpr | null
-    protected exprToCachedResult: ImmMap<ImmExpr, Value>
-    protected exprToCachedError: ImmMap<ImmExpr, Error>
+    protected exprToCachedResult: ImmMap<ImmExpr, ExpressionResult>
     protected exprToContributorExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>>
     protected exprToDependentExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>>
 
     constructor(
-        exprToCachedResult: ImmMap<ImmExpr, Value> = ImmMap<ImmExpr, Value>(),
-        exprToCachedError: ImmMap<ImmExpr, Error> = ImmMap<ImmExpr, Error>(),
+        exprToCachedResult: ImmMap<ImmExpr, ExpressionResult> = ImmMap<ImmExpr, ExpressionResult>(),
         exprToContributorExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>> = ImmMap<ImmExpr, ImmSet<ImmExpr>>(),
         exprToDependentExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>> = ImmMap<ImmExpr, ImmSet<ImmExpr>>()
     ) {
         this.cascadingPredicateAffectedExprsDuringSet = null
         this.currentlyComputingExprs = ImmSet<ImmExpr>()
         this.currentDeepestComputingExpr = null
-        this.exprToCachedError = exprToCachedError
         this.exprToCachedResult = exprToCachedResult
         this.exprToContributorExprs = exprToContributorExprs
         this.exprToDependentExprs = exprToDependentExprs
@@ -83,7 +82,6 @@ export class Database {
     protected invalidateSingleExprResult(expr: ImmExpr): void {
         // Remove the cached result or error for this expression
         this.exprToCachedResult = this.exprToCachedResult.delete(expr)
-        this.exprToCachedError = this.exprToCachedError.delete(expr)
 
         // Clear dependency tracking for this expression
         this.clearExprDependencies(expr)
@@ -107,21 +105,26 @@ export class Database {
         return discoveredExprs
     }
 
+    protected getOrThrowCachedResultFromImmExpr(expr: ImmExpr): Value {
+        
+    }
+
     getResult(expr: ListyExpr): Value {
         return this.getResultFromImmExpr(ImmList(expr))
     }
 
     protected getResultFromImmExpr(expr: ImmExpr): Value {
         // If there is already a cached result for this expression, return it
-        const cachedResult = this.exprToCachedResult.get(expr, NO_CACHED_VALUE)
-        if(cachedResult !== NO_CACHED_VALUE) {
-            return cachedResult
-        }
-
-        // If there is no cached result but there is a cached error, throw that
-        const cachedError = this.exprToCachedError.get(expr, NO_CACHED_VALUE)
-        if(cachedError !== NO_CACHED_VALUE) {
-            throw cachedError
+        const cachedResult = this.exprToCachedResult.get(expr)
+        if(cachedResult) {
+            const { value, isReturnValue } = cachedResult
+            
+            // Return the return value or throw the error, depending on which it is
+            if(isReturnValue) {
+                return value
+            } else {
+                throw value
+            }
         }
 
         // If there is no cached result or error but the predicate is a function, compute the result and return that
@@ -135,6 +138,7 @@ export class Database {
            of other expressions. In those cases, this will fail to compute the expression needed to set the derivative expression. 
            Some strategy should be figured out to determine what expression actually needs to be recomputed to get the derivative 
            expression to be set. */
+        // TODO: Add proper handling and testing for errors thrown here by the creating expression
         for (const term of expr) {
             if (term instanceof DerivativeId) {
                 const creatingExpr = term.creatingExpr
@@ -145,7 +149,8 @@ export class Database {
         }
 
         // After checking derivative IDs, return the cached result, or undefined if it still doesn't exist
-        return this.exprToCachedResult.get(expr)
+        // TODO: Add proper handling for cases when the cached result is an error
+        return this.exprToCachedResult.get(expr)?.value
     }
 
     protected setDeepestComputingExpr(expr: ImmExpr | null): void {
@@ -179,7 +184,7 @@ export class Database {
         })
 
         // Set the result in the cache
-        this.exprToCachedResult = this.exprToCachedResult.set(immExpr, result)
+        this.exprToCachedResult = this.exprToCachedResult.set(immExpr, new ExpressionResult(result, true))
 
         // If this expression has a Cascading Predicate, set any consequences and keep track of affected expressions.
         /* This is done after affected expression invalidation to avoid invalidating expressions set as consequences. This is okay because consequences 
@@ -285,13 +290,14 @@ export class Database {
         // Restore the previous calling key
         this.setDeepestComputingExpr(prevCallingKey)
 
+        // Update the cache with the result
+        this.exprToCachedResult = this.exprToCachedResult.set(expr, new ExpressionResult(result, gotReturn))
+
         if(gotReturn) {
-            // If there was no error, update the cache with and return the result
-            this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
+            // If there was no error, return the result
             return result
         } else {
-            // If there was an error, update the cache with and return it
-            this.exprToCachedError = this.exprToCachedError.set(expr, result)
+            // If there was an error, rethrow it
             throw result
         }
     }
@@ -305,7 +311,6 @@ export class Database {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
             this.exprToCachedResult,
-            this.exprToCachedError,
             this.exprToContributorExprs,
             this.exprToDependentExprs
         )
