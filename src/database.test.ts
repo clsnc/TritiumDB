@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, DerivativeId, CascadingPredicate } from './database'
+import { Database, DerivativeId, CascadingPredicate, RecursiveExpressionComputationError } from './database'
 import { List as ImmList } from 'immutable'
 
 describe('ReactiveDatabase', () => {
@@ -27,7 +27,7 @@ describe('ReactiveDatabase', () => {
     expect(func).toHaveBeenCalledWith(rdb, 'test-arg')
   })
 
-  it('handles recursive computation by returning undefined', () => {
+  it('throws RecursiveExpressionComputationError for recursive computation of the same expression', () => {
     const rdb = new Database()
     let recursiveCallCount = 0
 
@@ -40,9 +40,18 @@ describe('ReactiveDatabase', () => {
       return 'result'
     }
 
-    const result = rdb.getResult([recursiveFunc, 'test'])
-    expect(result).toBeUndefined() // Should return undefined due to recursion detection
-    expect(recursiveCallCount).toBe(1) // Should only call once due to recursion protection
+    const recursiveExpr = ImmList([recursiveFunc, 'test'])
+
+    let thrown
+    try {
+      rdb.getResult(recursiveExpr)
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(RecursiveExpressionComputationError)
+    expect(thrown.recursiveExpr).toEqual(recursiveExpr)
+    expect(recursiveCallCount).toBe(1)
   })
 
   it('creates immutable database with with() method', () => {

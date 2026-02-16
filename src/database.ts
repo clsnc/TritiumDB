@@ -25,6 +25,16 @@ export class CascadingPredicate {
     }
 }
 
+export class RecursiveExpressionComputationError extends Error {
+    public readonly name: string
+
+    constructor(readonly recursiveExpr: ImmExpr) {
+        super("Recursive expression computation detected")
+        this.recursiveExpr = recursiveExpr
+        this.name = "RecursiveExpressionComputationError"
+    }
+}
+
 class ExpressionResult {
     constructor(readonly value: Value | Error, readonly isReturnValue: boolean) {}
 }
@@ -251,9 +261,9 @@ export class Database {
 
     protected updateExprCacheAndGetResult(expr: ImmExpr): any {
         /* Compute the result unless we are already computing, in which case
-           we return undefined, as this means we are in a recursive call */
+           we throw an error, as this means we are in a recursive call */
         if (this.currentlyComputingExprs.has(expr)) {
-            return undefined
+            throw new RecursiveExpressionComputationError(expr)
         }
 
         // Record the previous calling key so it can be restored when we're done
