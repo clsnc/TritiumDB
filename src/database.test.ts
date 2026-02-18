@@ -489,6 +489,46 @@ describe('ReactiveDatabase', () => {
     expect(newResult).toBe('dependent-derived-new-base-value')
   })
 
+  it('handles A -> B -> C dependencies when A creates a derivative ID and sets an expression with it, C depends on that expression, and C is evaluated before A', () => {
+    const rdb = new Database()
+
+    const baseExpr = ImmList(['base'])
+    let db = rdb.with(baseExpr, 'base-value')
+    let storedDerivativeId
+
+    const predicateC = (db: Database, derivativeId: DerivativeId) => {
+      return db.spyResult(['derived-expr', derivativeId])
+    }
+
+    const predicateB = (db: Database, derivativeId: DerivativeId) => {
+      return db.spyResult([predicateC, derivativeId])
+    }
+
+    const predicateA = (db: Database) => {
+      const baseValue = db.spyResult(baseExpr)
+      const derivativeId = db.getDerivativeId('through-predicate-c')
+      storedDerivativeId = derivativeId
+
+      db.setDerivative(['derived-expr', derivativeId], `derived-${baseValue}`)
+
+      return db.spyResult([predicateB, derivativeId])
+    }
+
+    const exprA = ImmList([predicateA])
+
+    expect(db.getResult(exprA)).toBe('derived-base-value')
+
+    // Try changing the base value and calling exprA again
+    db = db.with(baseExpr, 'base-value-2')
+    expect(db.getResult(exprA)).toBe('derived-base-value-2')
+    
+    // Try changing the base value and calling the predicate chain from B first
+    db = db.with(baseExpr, 'base-value-3')
+    expect(db.getResult([predicateC, storedDerivativeId])).toBe('derived-base-value-3')
+    expect(db.getResult([predicateB, storedDerivativeId])).toBe('derived-base-value-3')
+    expect(db.getResult(exprA)).toBe('derived-base-value-3')
+  })
+
   it('derivative expressions can depend on regular expressions', () => {
     const rdb = new Database()
 

@@ -97,9 +97,9 @@ export class Database {
         this.clearExprDependencies(expr)
     }
 
-    protected getAllDependentExprsIncludingSeed(expr: ImmExpr): ImmSet<ImmExpr> {
-        // Perform a breadth-first search to find all direct or indrirect dependent expressions
-        let discoveredExprs = ImmSet<ImmExpr>([expr])
+    protected getAllDependentExprsIncludingSeed(expr: ImmExpr, blockedExprs: ImmExpr[] = []): ImmSet<ImmExpr> {
+        // Perform a breadth-first search to find all direct or indrirect dependent expressions, not proceeding past any blocked expressions
+        let discoveredExprs = ImmSet<ImmExpr>([expr, ...blockedExprs])
         const exprVisitQueue: ImmExpr[] = [expr]
         while (exprVisitQueue.length > 0) {
             const currentExpr = exprVisitQueue.pop()
@@ -112,7 +112,8 @@ export class Database {
             })
         }
 
-        return discoveredExprs
+        // Remove any blocked expressions from the set of discovered expressions before returning
+        return discoveredExprs.subtract(blockedExprs)
     }
 
     getResult(expr: ListyExpr): Value {
@@ -149,7 +150,28 @@ export class Database {
             if (term instanceof DerivativeId) {
                 const creatingExpr = term.creatingExpr
                 if (!this.exprToCachedResult.has(creatingExpr)) {
-                    this.getResultFromImmExpr(creatingExpr)
+                    try {
+                        // Recompute the creating expression so it can set the derivative expression
+                        this.getResultFromImmExpr(creatingExpr)
+                    } catch (err) {
+                        /* If recomputing the creating expression re-enters the current expression, we still
+                           allow this path when the derivative expression has already been set as a side effect. 
+                           Otherwise, preserve the original error behavior. */
+                        if(err instanceof RecursiveExpressionComputationError && this.exprToCachedResult.has(expr)) {
+                            /* Since the current expression now has a cached value, it's possible that the functions that threw 
+                               recursion errors will succeed if reevaluated in the future, even without changes to their dependencies. 
+                               Because of this, the cached recursion errors should be removed so that those functions will be reevaluated 
+                               if called again. Expressions whose caches need to be cleared can be found by starting with the expression 
+                               that originally threw the recursion error and working upward through its dependents, stopping at the current 
+                               expression. Because those expressions needed to be computed now and were not already cached, they must not 
+                               have any pre-existing dependents. So there is no chance of accidentally clearing cached results that 
+                               shouldn't be cleared. */
+                            const exprsToClearCache = this.getAllDependentExprsIncludingSeed(err.recursiveExpr, [expr])
+                            this.exprToCachedResult = this.exprToCachedResult.deleteAll(exprsToClearCache)
+                        } else {
+                            throw err
+                        }
+                    }
                 }
             }
         }
