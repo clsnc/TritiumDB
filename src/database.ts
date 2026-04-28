@@ -35,13 +35,6 @@ export class DerivativeId extends Record({
     }
 }
 
-export class CascadingPredicate {
-    setter: (db: Database, expr: Expression, result: Value) => void
-
-    constructor(setter: (db: Database, expr: Expression, result: Value) => void) {
-        this.setter = setter
-    }
-}
 
 export class RecursiveExpressionComputationError extends Error {
     public readonly name: string
@@ -58,7 +51,6 @@ class ExpressionResult {
 }
 
 export class Database {
-    protected cascadingPredicateAffectedExprsDuringSet: ImmSet<Expression> | null
     protected currentlyComputingExprs: ImmSet<Expression>
     protected currentDeepestComputingExpr: Expression | null
     protected exprToCachedResult: ImmMap<Expression, ExpressionResult>
@@ -70,7 +62,6 @@ export class Database {
         exprToContributorExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>(),
         exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>()
     ) {
-        this.cascadingPredicateAffectedExprsDuringSet = null
         this.currentlyComputingExprs = ImmSet<Expression>()
         this.currentDeepestComputingExpr = null
         this.exprToCachedResult = exprToCachedResult
@@ -223,41 +214,6 @@ export class Database {
 
         // Set the result in the cache
         this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
-
-        // If this expression has a Cascading Predicate, set any consequences and keep track of affected expressions.
-        /* This is done after affected expression invalidation to avoid invalidating expressions set as consequences. This is okay because consequences 
-           will invalidate their own affected expressions. */
-        if(expr.pred instanceof CascadingPredicate) {
-            // Check whether a cascading predicate is already being set (meaning this one being set is a consequence of another being set)
-            const alreadyInCascadingPredicateSet = this.cascadingPredicateAffectedExprsDuringSet !== null
-
-            // Record the previous calling expression so it can be restored when we're done
-            const prevCallingExpr = this.currentDeepestComputingExpr
-
-            // Mark this expression as the calling expression so that derivative expressions are marked as dependent on it
-            this.currentDeepestComputingExpr = expr
-
-            // If this predicate starts a predicate cascade, initialize a set to keep track of affected expressions
-            if(!alreadyInCascadingPredicateSet) {
-                this.cascadingPredicateAffectedExprsDuringSet = ImmSet()
-            // If this predicate is part of an existing predicate cascade, we just need to add it to the tracking set.
-            } else {
-                this.cascadingPredicateAffectedExprsDuringSet = this.cascadingPredicateAffectedExprsDuringSet.add(expr)
-            }
-
-            // Apply the predicate's setter function to set any consequences
-            // TODO: Properly handle any cases where this is an error result
-            expr.pred.setter(this, expr, result.value)
-
-            // If this predicate started a predicate cascade, record the affected expressions and remove the set for tracking them
-            if(!alreadyInCascadingPredicateSet) {
-                affectedExprs = affectedExprs.union(this.cascadingPredicateAffectedExprsDuringSet)
-                this.cascadingPredicateAffectedExprsDuringSet = null
-            }
-
-            // Restore the previous calling expression
-            this.currentDeepestComputingExpr = prevCallingExpr
-        }
 
         return affectedExprs
     }
