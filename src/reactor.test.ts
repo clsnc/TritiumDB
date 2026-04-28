@@ -119,4 +119,14 @@ describe('DatabaseReactor', () => {
         reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
     });
+
+    it('does not double-notify when the same expression is set multiple times before flushing', () => {
+        const reactor = new Reactor();
+        const callback = vi.fn();
+        reactor.subscribe(expr('a'), callback);
+        reactor.set(expr('a'), 1);
+        reactor.set(expr('a'), 2);
+        reactor.flushNotifications();
+        expect(callback).toHaveBeenCalledTimes(1);
+    });
 });

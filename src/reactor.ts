@@ -5,7 +5,7 @@ import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYN
 export class Reactor {
     private db: Database;
     private subscribers: ImmutableMap<Expression, Set<() => void>> = ImmutableMap();
-    private invalidatedExprsPendingSubscriberNotifications: Set<Expression> = new Set();
+    private invalidatedExprsPendingSubscriberNotifications: ImmSet<Expression> = ImmSet();
 
     constructor(initialDb?: Database) {
         this.db = initialDb || new Database();
@@ -15,7 +15,7 @@ export class Reactor {
     protected applyChangeFunc(func: () => [Database, ImmSet<Expression>]): void {
         const [newDb, affectedExprs] = func()
         this.db = newDb;
-        affectedExprs.forEach(expr => this.invalidatedExprsPendingSubscriberNotifications.add(expr));
+        this.invalidatedExprsPendingSubscriberNotifications = this.invalidatedExprsPendingSubscriberNotifications.union(affectedExprs);
     }
 
     ensureAsyncRun<T extends (...args: any[]) => Promise<any>>(func: T, ...args: Parameters<T>): ReturnType<T> {
@@ -184,6 +184,6 @@ export class Reactor {
                 }
             }
         }
-        this.invalidatedExprsPendingSubscriberNotifications.clear();
+        this.invalidatedExprsPendingSubscriberNotifications = ImmSet();
     }
 }
