@@ -72,7 +72,7 @@ describe('DatabaseReactor', () => {
 
     it('handles dependent expression notifications: notifies on change, skips duplicates without recompute, resumes after recompute', () => {
         const reactor = new Reactor();
-        const depFunc = (db: Database, arg) => db.spyResult(expr('base', arg)) + 1;
+        const depFunc = (db: Database, arg: string) => db.spyResult(expr('base', arg)) + 1;
         // Set up base value and create dependency
         reactor.set(expr('base', 'key'), 10);
         expect(reactor.getResult(expr(depFunc, 'key'))).toBe(11);
@@ -98,7 +98,7 @@ describe('DatabaseReactor', () => {
     it('subscribe computes dependent expression for notifications', () => {
         const reactor = new Reactor();
         const callback = vi.fn();
-        const depFunc = (db: Database, arg) => db.spyResult(expr('base', arg)) + 1;
+        const depFunc = (db: Database, arg: string) => db.spyResult(expr('base', arg)) + 1;
 
         reactor.set(expr('base', 'key'), 10);
         reactor.subscribe(expr(depFunc, 'key'), callback);
