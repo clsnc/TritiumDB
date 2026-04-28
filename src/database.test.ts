@@ -30,7 +30,7 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
     let recursiveCallCount = 0
 
-    const recursiveFunc = (db: Database, arg: string) => {
+    const recursiveFunc = (db: Database, arg: string): string => {
       recursiveCallCount++
       if (recursiveCallCount === 1) {
         // First call, trigger recursion
@@ -49,7 +49,7 @@ describe('ReactiveDatabase', () => {
     }
 
     expect(thrown).toBeInstanceOf(RecursiveExpressionComputationError)
-    expect(thrown.recursiveExpr.equals(recursiveExpr)).toBe(true)
+    expect((thrown as RecursiveExpressionComputationError).recursiveExpr.equals(recursiveExpr)).toBe(true)
     expect(recursiveCallCount).toBe(1)
   })
 
@@ -1012,7 +1012,8 @@ describe('ReactiveDatabase', () => {
       secondError = err
     }
 
-    expect(firstError.message).toEqual('boom')
+    expect(firstError instanceof Error)
+    expect((firstError as Error).message).toEqual('boom')
     expect(secondError).toBe(firstError)
     expect(throwingFunc).toHaveBeenCalledTimes(1)
   })
