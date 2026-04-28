@@ -1,18 +1,18 @@
-import { List, Map as ImmutableMap, Set as ImmSet } from "immutable";
-import { Database, ListyExpr, ImmExpr, Value} from './database';
+import { Map as ImmutableMap, Set as ImmSet } from "immutable";
+import { Database, Expression, expr, Value } from './database';
 import { ASYNC_CALL_PROMISE_INTERNAL_PRED, ASYNC_CALL_RESULT_INTERNAL_PRED, ASYNC_CALL_STATUS_INTERNAL_PRED, AsyncCallIncompleteError, AsyncCallStatus, EXPR_PROMISE_INTERNAL_PRED, resultIsReady } from "./async";
 
 export class Reactor {
     private db: Database;
-    private subscribers: ImmutableMap<ImmExpr, Set<() => void>> = ImmutableMap();
-    private invalidatedExprsPendingSubscriberNotifications: Set<ImmExpr> = new Set();
+    private subscribers: ImmutableMap<Expression, Set<() => void>> = ImmutableMap();
+    private invalidatedExprsPendingSubscriberNotifications: Set<Expression> = new Set();
 
     constructor(initialDb?: Database) {
         this.db = initialDb || new Database();
     }
 
     // TODO: Add testing for this
-    protected applyChangeFunc(func: () => [Database, ImmSet<ImmExpr>]): void {
+    protected applyChangeFunc(func: () => [Database, ImmSet<Expression>]): void {
         const [newDb, affectedExprs] = func()
         this.db = newDb;
         affectedExprs.forEach(expr => this.invalidatedExprsPendingSubscriberNotifications.add(expr));
@@ -20,49 +20,46 @@ export class Reactor {
 
     ensureAsyncRun<T extends (...args: any[]) => Promise<any>>(func: T, ...args: Parameters<T>): ReturnType<T> {
         // If a call has not already been initiated, initiate it
-        const currStatus = this.db.getResult([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args])
+        const currStatus = this.db.getResult(expr(ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args))
         if (currStatus === undefined) {
             // Set the executing status immediately
-            this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Executing)
+            this.set(expr(ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args), AsyncCallStatus.Executing)
             
             // Call the function and get a promise for the result
             const promise = func(...args) as ReturnType<T>
 
             // Store the promise so it can be retrieved by later calls of this function
-            this.set([ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args], promise)
+            this.set(expr(ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args), promise)
 
             promise
                 .then(retVal => {
                     // If the async call succeeds, record the return value and update the call status in the database
-                    this.set([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], retVal)
-                    this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
+                    this.set(expr(ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args), retVal)
+                    this.set(expr(ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args), AsyncCallStatus.Complete)
                     this.flushNotifications()
                 }).catch(err => {
                     // If the async call throws an error, record the thrown error and update the call status in the database
-                    this.setError([ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args], err)
-                    this.set([ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args], AsyncCallStatus.Complete)
+                    this.setError(expr(ASYNC_CALL_RESULT_INTERNAL_PRED, func, ...args), err)
+                    this.set(expr(ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args), AsyncCallStatus.Complete)
                     this.flushNotifications()
                 }) 
 
             return promise
         } else {
             // If the async call has already been initiated, return the existing promise
-            return this.getResult([ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args])
+            return this.getResult(expr(ASYNC_CALL_PROMISE_INTERNAL_PRED, func, ...args))
         }
     }
 
-    subscribe(expr: ListyExpr, callback: () => void): () => void {
-        // Make sure the expression is represented as an immutable List
-        const immExpr: ImmExpr = List(expr);
-
+    subscribe(expr: Expression, callback: () => void): () => void {
         // Get the result. The result won't be used, but it any dependencies to be established for expressions with function predicates.
-        this.db.getResult(immExpr)
+        this.db.getResult(expr)
 
         // Get or create the callbacks Set
-        let exprCallbacks = this.subscribers.get(immExpr);
+        let exprCallbacks = this.subscribers.get(expr);
         if(!exprCallbacks) {
             exprCallbacks = new Set();
-            this.subscribers = this.subscribers.set(immExpr, exprCallbacks)
+            this.subscribers = this.subscribers.set(expr, exprCallbacks)
         }
 
         // Add the callback
@@ -70,10 +67,10 @@ export class Reactor {
 
         // Return a function to unsubscribe
         return () => {
-            const exprCallbacks = this.subscribers.get(immExpr);
+            const exprCallbacks = this.subscribers.get(expr);
             if (exprCallbacks.size === 1) {
                 // If this was the only subscription, then this expression's entry should just be deleted
-                this.subscribers = this.subscribers.delete(immExpr);
+                this.subscribers = this.subscribers.delete(expr);
             } else {
                 // Otherwise, just remove this callback
                 exprCallbacks.delete(callback)
@@ -81,11 +78,11 @@ export class Reactor {
         };
     }
 
-    getEnsuredResultPromise(expr: ListyExpr): Promise<Value> {
+    getEnsuredResultPromise(expr: Expression): Promise<Value> {
         // Initiate an async function to ensure async runs until the result can finish computing
         const ensureAllRuns = async () => {
             // As long as the expression is not ready, find the next incomplete async expression and ensure it is being run
-            const readyExpr = [resultIsReady, ...expr]
+            const readyExpr = new Expression(resultIsReady, [expr.pred, ...expr.args])
             while(!this.getResult(readyExpr)) {
                 /* Because the result isn't considered ready, the only error that should ever be thrown by getting the result 
                    is one indicating an incomplete async call */
@@ -94,9 +91,8 @@ export class Reactor {
                 } catch(err) {
                     // Awaiting prevents the loop from repeatedly ensuring the same dependency
                     try {
-                        // TODO: Fix type error below
-                        // @ts-expect-error
-                        await this.ensureAsyncRun(...(err as AsyncCallIncompleteError).incompleteExpr)
+                        const incompleteExpr = (err as AsyncCallIncompleteError).incompleteExpr
+                        await this.ensureAsyncRun(incompleteExpr.pred, ...incompleteExpr.args)
                     } catch(_) {
                         // Nothing needs to be done here if the async call throws an error. How that is handled is up to the calling predicate function.
                     }
@@ -108,13 +104,13 @@ export class Reactor {
         return this.getResultPromise(expr)
     }
 
-    getResult(expr: ListyExpr) {
+    getResult(expr: Expression) {
         return this.db.getResult(expr);
     }
 
-    getResultPromise(expr: ListyExpr): Promise<Value> {
+    getResultPromise(expr: Expression): Promise<Value> {
         // If there is already a stored promise for this result, return it. Otherwise, create one, store it, and return it.
-        const storedPromiseExpr = [EXPR_PROMISE_INTERNAL_PRED, ...expr]
+        const storedPromiseExpr = new Expression(EXPR_PROMISE_INTERNAL_PRED, [expr.pred, ...expr.args])
         const storedPromise = this.getResult(storedPromiseExpr)
         if(storedPromise) {
             return storedPromise
@@ -122,7 +118,7 @@ export class Reactor {
             let promise: Promise<Value>
 
             // Figure out whether the expression result is already ready
-            const readyExpr: ListyExpr = [resultIsReady, ...expr]
+            const readyExpr = new Expression(resultIsReady, [expr.pred, ...expr.args])
             const isReady = this.getResult(readyExpr)
 
             if (isReady) {
@@ -167,15 +163,15 @@ export class Reactor {
     }
 
     // TODO: Add testing for this
-    modify(expr: ListyExpr, modifier: (oldValue: Value) => Value): void {
+    modify(expr: Expression, modifier: (oldValue: Value) => Value): void {
         this.applyChangeFunc(() => this.db.withModifiedGetAffectedRels(expr, modifier))
     }
 
-    set(expr: ListyExpr, result: Value): void {
-        this.applyChangeFunc(() => this.db.withGetAffectedRels(expr, result))     
+    set(expr: Expression, result: Value): void {
+        this.applyChangeFunc(() => this.db.withGetAffectedRels(expr, result))
     }
 
-    setError(expr: ListyExpr, err: any): void {
+    setError(expr: Expression, err: any): void {
         this.applyChangeFunc(() => this.db.withErrorGetAffectedRels(expr, err))
     }
 

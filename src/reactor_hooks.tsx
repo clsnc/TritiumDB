@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { Reactor } from "./reactor"
-import { ListyExpr, Value } from "./database"
+import { Expression, Value } from "./database"
 
-export function useResult(dbr: Reactor, expr: ListyExpr): Value {
+export function useResult(dbr: Reactor, expr: Expression): Value {
     return useSyncExternalStore((callback: () => void) => dbr.subscribe(expr, callback), () => dbr.getResult(expr))
 }

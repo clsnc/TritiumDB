@@ -1,26 +1,44 @@
-import { List as ImmList, Map as ImmMap, Set as ImmSet, Record } from "immutable"
+import { List as ImmList, Map as ImmMap, Set as ImmSet, Record, ValueObject } from "immutable"
 import { AsyncCallIncompleteError, asyncCallResult, AsyncCallStatus, asyncCallStatus } from "./async"
 
-type Function = (...args: any[]) => any
-
 export type Value = any
-export type ImmExpr = ImmList<Value>
-export type ArrExpr = Value[]
-export type ListyExpr = ImmExpr | ArrExpr
+
+export class Expression<P = any, A extends any[] = any[]> implements ValueObject {
+    private readonly _list: ImmList<any>
+
+    constructor(pred: P, args: A) {
+        this._list = ImmList([pred, ...args])
+    }
+
+    get pred(): P { return this._list.get(0) as P }
+    get args(): A { return this._list.shift().toArray() as A }
+
+    hashCode(): number { return this._list.hashCode() }
+
+    equals(other: unknown): boolean {
+        return other instanceof Expression && this._list.equals((other as Expression)._list)
+    }
+
+    [Symbol.iterator](): Iterator<any> { return this._list[Symbol.iterator]() }
+}
+
+export function expr<P, A extends any[]>(pred: P, ...args: A): Expression<P, A> {
+    return new Expression(pred, args)
+}
 
 export class DerivativeId extends Record({
     creatingExpr: null,
     uniqueKey: null
 }) {
-    constructor(creatingExpr: ImmExpr, uniqueKey: any) {
+    constructor(creatingExpr: Expression, uniqueKey: any) {
         super({ creatingExpr, uniqueKey })
     }
 }
 
 export class CascadingPredicate {
-    setter: (db: Database, expr: ImmExpr, result: Value) => void
+    setter: (db: Database, expr: Expression, result: Value) => void
 
-    constructor(setter: (db: Database, expr: ImmExpr, result: Value) => void) {
+    constructor(setter: (db: Database, expr: Expression, result: Value) => void) {
         this.setter = setter
     }
 }
@@ -28,7 +46,7 @@ export class CascadingPredicate {
 export class RecursiveExpressionComputationError extends Error {
     public readonly name: string
 
-    constructor(readonly recursiveExpr: ImmExpr) {
+    constructor(readonly recursiveExpr: Expression) {
         super("Recursive expression computation detected")
         this.recursiveExpr = recursiveExpr
         this.name = "RecursiveExpressionComputationError"
@@ -40,27 +58,27 @@ class ExpressionResult {
 }
 
 export class Database {
-    protected cascadingPredicateAffectedExprsDuringSet: ImmSet<ImmExpr> | null
-    protected currentlyComputingExprs: ImmSet<ImmExpr>
-    protected currentDeepestComputingExpr: ImmExpr | null
-    protected exprToCachedResult: ImmMap<ImmExpr, ExpressionResult>
-    protected exprToContributorExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>>
-    protected exprToDependentExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>>
+    protected cascadingPredicateAffectedExprsDuringSet: ImmSet<Expression> | null
+    protected currentlyComputingExprs: ImmSet<Expression>
+    protected currentDeepestComputingExpr: Expression | null
+    protected exprToCachedResult: ImmMap<Expression, ExpressionResult>
+    protected exprToContributorExprs: ImmMap<Expression, ImmSet<Expression>>
+    protected exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>>
 
     constructor(
-        exprToCachedResult: ImmMap<ImmExpr, ExpressionResult> = ImmMap<ImmExpr, ExpressionResult>(),
-        exprToContributorExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>> = ImmMap<ImmExpr, ImmSet<ImmExpr>>(),
-        exprToDependentExprs: ImmMap<ImmExpr, ImmSet<ImmExpr>> = ImmMap<ImmExpr, ImmSet<ImmExpr>>()
+        exprToCachedResult: ImmMap<Expression, ExpressionResult> = ImmMap<Expression, ExpressionResult>(),
+        exprToContributorExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>(),
+        exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>()
     ) {
         this.cascadingPredicateAffectedExprsDuringSet = null
-        this.currentlyComputingExprs = ImmSet<ImmExpr>()
+        this.currentlyComputingExprs = ImmSet<Expression>()
         this.currentDeepestComputingExpr = null
         this.exprToCachedResult = exprToCachedResult
         this.exprToContributorExprs = exprToContributorExprs
         this.exprToDependentExprs = exprToDependentExprs
     }
 
-    protected addDependency(dependentExpr: ImmExpr, contributorExpr: ImmExpr): void {
+    protected addDependency(dependentExpr: Expression, contributorExpr: Expression): void {
         // Record the contributor expression in the set of the dependent expression's contributors
         this.exprToContributorExprs = this.exprToContributorExprs.update(dependentExpr, contributorExprs => (contributorExprs || ImmSet()).add(contributorExpr))
 
@@ -76,7 +94,7 @@ export class Database {
         return new DerivativeId(this.currentDeepestComputingExpr, uniqueKey)
     }
 
-    protected clearExprDependencies(expr: ImmExpr): void {
+    protected clearExprDependencies(expr: Expression): void {
         // Get the contributing expressions for this expression
         const contributorKeys = this.exprToContributorExprs.get(expr)
 
@@ -89,7 +107,7 @@ export class Database {
         })
     }
 
-    protected invalidateSingleExprResult(expr: ImmExpr): void {
+    protected invalidateSingleExprResult(expr: Expression): void {
         // Remove the cached result or error for this expression
         this.exprToCachedResult = this.exprToCachedResult.delete(expr)
 
@@ -97,13 +115,13 @@ export class Database {
         this.clearExprDependencies(expr)
     }
 
-    protected getAllDependentExprsIncludingSeed(expr: ImmExpr, blockedExprs: ImmExpr[] = []): ImmSet<ImmExpr> {
+    protected getAllDependentExprsIncludingSeed(expr: Expression, blockedExprs: Expression[] = []): ImmSet<Expression> {
         // Perform a breadth-first search to find all direct or indrirect dependent expressions, not proceeding past any blocked expressions
-        let discoveredExprs = ImmSet<ImmExpr>([expr, ...blockedExprs])
-        const exprVisitQueue: ImmExpr[] = [expr]
+        let discoveredExprs = ImmSet<Expression>([expr, ...blockedExprs])
+        const exprVisitQueue: Expression[] = [expr]
         while (exprVisitQueue.length > 0) {
             const currentExpr = exprVisitQueue.pop()
-            const currentDependentExprs = this.exprToDependentExprs.get(currentExpr) || ImmSet<ImmExpr>()
+            const currentDependentExprs = this.exprToDependentExprs.get(currentExpr) || ImmSet<Expression>()
             currentDependentExprs.forEach(dependentExpr => {
                 if (!discoveredExprs.has(dependentExpr)) {
                     discoveredExprs = discoveredExprs.add(dependentExpr)
@@ -116,11 +134,7 @@ export class Database {
         return discoveredExprs.subtract(blockedExprs)
     }
 
-    getResult(expr: ListyExpr): Value {
-        return this.getResultFromImmExpr(ImmList(expr))
-    }
-
-    protected getResultFromImmExpr(expr: ImmExpr): Value {
+    getResult(expr: Expression): Value {
         // If there is already a cached result for this expression, return it
         const cachedResult = this.exprToCachedResult.get(expr)
         if(cachedResult) {
@@ -135,7 +149,7 @@ export class Database {
         }
 
         // If there is no cached result or error but the predicate is a function, compute the result and return that
-        const pred = expr.get(0)
+        const pred = expr.pred
         if (typeof pred === "function") {
             return this.updateExprCacheAndGetResult(expr)
         }
@@ -152,7 +166,7 @@ export class Database {
                 if (!this.exprToCachedResult.has(creatingExpr)) {
                     try {
                         // Recompute the creating expression so it can set the derivative expression
-                        this.getResultFromImmExpr(creatingExpr)
+                        this.getResult(creatingExpr)
                     } catch (err) {
                         /* If recomputing the creating expression re-enters the current expression, we still
                            allow this path when the derivative expression has already been set as a side effect. 
@@ -181,44 +195,39 @@ export class Database {
         return this.exprToCachedResult.get(expr)?.value
     }
 
-    protected setDeepestComputingExpr(expr: ImmExpr | null): void {
+    protected setDeepestComputingExpr(expr: Expression | null): void {
         this.currentDeepestComputingExpr = expr
     }
 
-    setDerivative(expr: ListyExpr, result: Value): void {
+    setDerivative(expr: Expression, result: Value): void {
         if (this.currentDeepestComputingExpr === null) {
             throw new Error("setDerivative can only be called during expression computation")
         }
 
-        const derivativeExpr = ImmList(expr)
-
         // Set the result
         /* Any dependencies on this derivative expression should have been invalidated when the setting expression was, 
            so getting affected expressions shouldn't be significant waste of compute. */
-        this.setResultGetAffectedExprs(derivativeExpr, new ExpressionResult(result, true))
+        this.setResultGetAffectedExprs(expr, new ExpressionResult(result, true))
 
         // Mark the derivative expression as dependent on the currently computing expression
-        this.addDependency(derivativeExpr, this.currentDeepestComputingExpr)
-
+        this.addDependency(expr, this.currentDeepestComputingExpr)
     }
 
-    protected setResultGetAffectedExprs(expr: ListyExpr, result: ExpressionResult): ImmSet<ImmExpr> {
-        const immExpr: ImmExpr = ImmList(expr)
-        let affectedExprs = this.getAllDependentExprsIncludingSeed(immExpr)
-        
+    protected setResultGetAffectedExprs(expr: Expression, result: ExpressionResult): ImmSet<Expression> {
+        let affectedExprs = this.getAllDependentExprsIncludingSeed(expr)
+
         // Invalidate all affected expressions
         affectedExprs.forEach(affectedExpr => {
             this.invalidateSingleExprResult(affectedExpr)
         })
 
         // Set the result in the cache
-        this.exprToCachedResult = this.exprToCachedResult.set(immExpr, result)
+        this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
 
         // If this expression has a Cascading Predicate, set any consequences and keep track of affected expressions.
         /* This is done after affected expression invalidation to avoid invalidating expressions set as consequences. This is okay because consequences 
            will invalidate their own affected expressions. */
-        const pred = immExpr.get(0)
-        if(pred instanceof CascadingPredicate) {
+        if(expr.pred instanceof CascadingPredicate) {
             // Check whether a cascading predicate is already being set (meaning this one being set is a consequence of another being set)
             const alreadyInCascadingPredicateSet = this.cascadingPredicateAffectedExprsDuringSet !== null
 
@@ -226,19 +235,19 @@ export class Database {
             const prevCallingExpr = this.currentDeepestComputingExpr
 
             // Mark this expression as the calling expression so that derivative expressions are marked as dependent on it
-            this.currentDeepestComputingExpr = immExpr
+            this.currentDeepestComputingExpr = expr
 
             // If this predicate starts a predicate cascade, initialize a set to keep track of affected expressions
             if(!alreadyInCascadingPredicateSet) {
                 this.cascadingPredicateAffectedExprsDuringSet = ImmSet()
             // If this predicate is part of an existing predicate cascade, we just need to add it to the tracking set.
             } else {
-                this.cascadingPredicateAffectedExprsDuringSet = this.cascadingPredicateAffectedExprsDuringSet.add(immExpr)
+                this.cascadingPredicateAffectedExprsDuringSet = this.cascadingPredicateAffectedExprsDuringSet.add(expr)
             }
 
             // Apply the predicate's setter function to set any consequences
             // TODO: Properly handle any cases where this is an error result
-            pred.setter(this, immExpr, result.value)
+            expr.pred.setter(this, expr, result.value)
 
             // If this predicate started a predicate cascade, record the affected expressions and remove the set for tracking them
             if(!alreadyInCascadingPredicateSet) {
@@ -253,35 +262,32 @@ export class Database {
         return affectedExprs
     }
 
-    spyAsyncEffectResult<Pred extends (...args: any[]) => Promise<any>>(expr: Parameters<Pred> extends [any, ...infer Rest] ? [Pred, ...Rest] : [Pred]): Awaited<ReturnType<Pred>>
-    spyAsyncEffectResult(expr: [any, ...any[]]): any
-    spyAsyncEffectResult(expr: [any, ...any[]]): any {
-        const callStatus = this.spyResult([asyncCallStatus, ...expr])
+    spyAsyncEffectResult<Pred extends (...args: any[]) => Promise<any>>(expr: Expression<Pred, any[]>): Awaited<ReturnType<Pred>>
+    spyAsyncEffectResult(expr: Expression): any
+    spyAsyncEffectResult(expr: Expression): any {
+        const callStatus = this.spyResult(new Expression(asyncCallStatus, [expr.pred, ...expr.args]))
         if(callStatus === AsyncCallStatus.Complete) {
             // If the async call is complete, return its return value
-            return this.spyResult([asyncCallResult, ...expr])
+            return this.spyResult(new Expression(asyncCallResult, [expr.pred, ...expr.args]))
         } else {
             // If the async call is incomplete, throw an error
-            const immExpr = ImmList(expr)
-            throw new AsyncCallIncompleteError(immExpr)
+            throw new AsyncCallIncompleteError(expr)
         }
     }
 
-    spyResult<Pred extends Function>(expr: Parameters<Pred> extends [any, ...infer Rest] ? [Pred, ...Rest] : [Pred]): ReturnType<Pred>
-    spyResult(expr: [any, ...any[]]): any
-    spyResult(expr: [any, ...any[]]): any {
-        const immExpr: ImmExpr = ImmList(expr)
-        
+    spyResult<P extends (...args: any[]) => any>(expr: Expression<P, any[]>): ReturnType<P>
+    spyResult(expr: Expression): any
+    spyResult(expr: Expression): any {
         /* If there is a currently computing expression, then that expression must depend on the one 
            whose result is being requested. So that dependency should be recorded. */
         if (this.currentDeepestComputingExpr !== null) {
-            this.addDependency(this.currentDeepestComputingExpr, immExpr)
+            this.addDependency(this.currentDeepestComputingExpr, expr)
         }
 
-        return this.getResultFromImmExpr(immExpr)
+        return this.getResult(expr)
     }
 
-    protected updateExprCacheAndGetResult(expr: ImmExpr): any {
+    protected updateExprCacheAndGetResult(expr: Expression): any {
         /* Compute the result unless we are already computing, in which case
            we throw an error, as this means we are in a recursive call */
         if (this.currentlyComputingExprs.has(expr)) {
@@ -300,12 +306,10 @@ export class Database {
         this.currentlyComputingExprs = this.currentlyComputingExprs.add(expr)
 
         // Compute the result or error
-        const func = expr.get(0)
-        const args = expr.shift()
         let gotReturn: boolean
         let result
         try {
-            result = func(this, ...args)
+            result = expr.pred(this, ...expr.args)
             gotReturn = true
         } catch(err) {
             result = err
@@ -331,25 +335,25 @@ export class Database {
         }
     }
 
-    with(expr: ListyExpr, result: Value): Database {
+    with(expr: Expression, result: Value): Database {
         // Return just the new database
         return this.withGetAffectedRels(expr, result)[0]
     }
 
-    withError(expr: ListyExpr, err: Value): Database {
+    withError(expr: Expression, err: Value): Database {
         // Return just the new database
         return this.withErrorGetAffectedRels(expr, err)[0]
     }
 
-    withErrorGetAffectedRels(expr: ListyExpr, err: Value): [Database, ImmSet<ImmExpr>] {
+    withErrorGetAffectedRels(expr: Expression, err: Value): [Database, ImmSet<Expression>] {
         return this.withResultGetAffectedRels(expr, new ExpressionResult(err, false))
     }
 
-    withGetAffectedRels(expr, resVal: Value): [Database, ImmSet<ImmExpr>] {
+    withGetAffectedRels(expr: Expression, resVal: Value): [Database, ImmSet<Expression>] {
         return this.withResultGetAffectedRels(expr, new ExpressionResult(resVal, true))
     }
 
-    protected withResultGetAffectedRels(expr: ListyExpr, result: ExpressionResult): [Database, ImmSet<ImmExpr>] {
+    protected withResultGetAffectedRels(expr: Expression, result: ExpressionResult): [Database, ImmSet<Expression>] {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
             this.exprToCachedResult,
@@ -363,12 +367,12 @@ export class Database {
         return [newDb, affectedRels]
     }
 
-    withModified(expr: ListyExpr, modifier: (val: Value) => Value): Database {
+    withModified(expr: Expression, modifier: (val: Value) => Value): Database {
         // Return just the new database
         return this.withModifiedGetAffectedRels(expr, modifier)[0]
     }
 
-    withModifiedGetAffectedRels(expr: ListyExpr, modifier: (oldResult: Value) => Value): [Database, ImmSet<ImmExpr>] {
+    withModifiedGetAffectedRels(expr: Expression, modifier: (oldResult: Value) => Value): [Database, ImmSet<Expression>] {
         // The new result is the old result with the modifier function applied to it
         const newResult = modifier(this.getResult(expr))
         return this.withGetAffectedRels(expr, newResult)

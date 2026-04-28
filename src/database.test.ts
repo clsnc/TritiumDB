@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, DerivativeId, CascadingPredicate, RecursiveExpressionComputationError } from './database'
-import { List as ImmList } from 'immutable'
+import { Database, DerivativeId, CascadingPredicate, RecursiveExpressionComputationError, Expression, expr } from './database'
 
 describe('ReactiveDatabase', () => {
   it('creates a ReactiveDatabase instance', () => {
@@ -11,18 +10,18 @@ describe('ReactiveDatabase', () => {
 
   it('returns undefined for non-function predicates without cached result', () => {
     const rdb = new Database()
-    const expr = ['not-a-function', 'arg1', 'arg2']
+    const e = expr('not-a-function', 'arg1', 'arg2')
 
-    const result = rdb.getResult(expr)
+    const result = rdb.getResult(e)
     expect(result).toBeUndefined()
   })
 
   it('computes result for function predicates', () => {
     const rdb = new Database()
     const func = vi.fn((db, arg) => `computed-${arg}`)
-    const expr = [func, 'test-arg']
+    const e = expr(func, 'test-arg')
 
-    const result = rdb.getResult(expr)
+    const result = rdb.getResult(e)
     expect(result).toBe('computed-test-arg')
     expect(func).toHaveBeenCalledWith(rdb, 'test-arg')
   })
@@ -35,12 +34,12 @@ describe('ReactiveDatabase', () => {
       recursiveCallCount++
       if (recursiveCallCount === 1) {
         // First call, trigger recursion
-        return db.spyResult([recursiveFunc, arg])
+        return db.spyResult(expr(recursiveFunc, arg))
       }
       return 'result'
     }
 
-    const recursiveExpr = ImmList([recursiveFunc, 'test'])
+    const recursiveExpr = expr(recursiveFunc, 'test')
 
     let thrown
     try {
@@ -50,65 +49,65 @@ describe('ReactiveDatabase', () => {
     }
 
     expect(thrown).toBeInstanceOf(RecursiveExpressionComputationError)
-    expect(thrown.recursiveExpr).toEqual(recursiveExpr)
+    expect(thrown.recursiveExpr.equals(recursiveExpr)).toBe(true)
     expect(recursiveCallCount).toBe(1)
   })
 
   it('creates immutable database with with() method', () => {
     const rdb = new Database()
-    const expr = ImmList(['test', 'arg'])
+    const e = expr('test', 'arg')
     const result = 'test-result'
 
-    const newDb = rdb.with(expr, result)
+    const newDb = rdb.with(e, result)
 
     expect(newDb).toBeInstanceOf(Database)
     expect(newDb).not.toBe(rdb) // Should be a new instance
-    expect(newDb.getResult(expr)).toBe(result)
-    expect(rdb.getResult(expr)).toBeUndefined() // Original unchanged
+    expect(newDb.getResult(e)).toBe(result)
+    expect(rdb.getResult(e)).toBeUndefined() // Original unchanged
   })
 
   it('returns affected expressions with withGetAffectedRels()', () => {
     const rdb = new Database()
-    const expr = ImmList(['test', 'arg'])
+    const e = expr('test', 'arg')
     const result = 'test-result'
 
-    const [newDb, affectedExprs] = rdb.withGetAffectedRels(expr, result)
+    const [newDb, affectedExprs] = rdb.withGetAffectedRels(e, result)
 
     expect(newDb).toBeInstanceOf(Database)
-    expect(affectedExprs.has(expr)).toBe(true)
-    expect(newDb.getResult(expr)).toBe(result)
+    expect(affectedExprs.has(e)).toBe(true)
+    expect(newDb.getResult(e)).toBe(result)
   })
 
   it('creates immutable database with withError()', () => {
     const rdb = new Database()
-    const expr = ImmList(['error', 'arg'])
+    const e = expr('error', 'arg')
     const err = new Error('bad')
 
-    const newDb = rdb.withError(expr, err)
+    const newDb = rdb.withError(e, err)
 
     expect(newDb).toBeInstanceOf(Database)
     expect(newDb).not.toBe(rdb)
-    expect(() => newDb.getResult(expr)).toThrow(err)
-    expect(rdb.getResult(expr)).toBeUndefined()
+    expect(() => newDb.getResult(e)).toThrow(err)
+    expect(rdb.getResult(e)).toBeUndefined()
   })
 
   it('returns affected expressions with withErrorGetAffectedRels()', () => {
     const rdb = new Database()
-    const expr = ImmList(['error', 'arg'])
+    const e = expr('error', 'arg')
     const err = new Error('bad')
 
-    const [newDb, affectedExprs] = rdb.withErrorGetAffectedRels(expr, err)
+    const [newDb, affectedExprs] = rdb.withErrorGetAffectedRels(e, err)
 
     expect(newDb).toBeInstanceOf(Database)
-    expect(affectedExprs.has(expr)).toBe(true)
-    expect(() => newDb.getResult(expr)).toThrow(err)
+    expect(affectedExprs.has(e)).toBe(true)
+    expect(() => newDb.getResult(e)).toThrow(err)
   })
 
   it('allows values to depend on other values', () => {
     const rdb = new Database()
 
     // Create a base expression
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const db1 = rdb.with(baseExpr, 'base-value')
 
     // Create a dependent expression that uses the base
@@ -116,7 +115,7 @@ describe('ReactiveDatabase', () => {
       const baseValue = db.spyResult(baseExpr)
       return `dependent-${baseValue}`
     }
-    const dependentExpr = ImmList([dependentFunc])
+    const dependentExpr = expr(dependentFunc)
 
     const result = db1.getResult(dependentExpr)
     expect(result).toBe('dependent-base-value')
@@ -126,7 +125,7 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Set up base expression
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const db1 = rdb.with(baseExpr, 'value1')
 
     // Create dependent expression
@@ -134,7 +133,7 @@ describe('ReactiveDatabase', () => {
       const baseValue = db.spyResult(baseExpr)
       return `dependent-${baseValue}`
     }
-    const dependentExpr = ImmList([dependentFunc])
+    const dependentExpr = expr(dependentFunc)
 
     // Compute dependent result
     const result1 = db1.getResult(dependentExpr)
@@ -148,22 +147,12 @@ describe('ReactiveDatabase', () => {
     expect(result2).toBe('dependent-value2')
   })
 
-  it('handles array expressions as well as immutable lists', () => {
-    const rdb = new Database()
-    const func = vi.fn((db, arg) => `array-${arg}`)
-    const arrayExpr = [func, 'test']
-
-    const result = rdb.getResult(arrayExpr)
-    expect(result).toBe('array-test')
-    expect(func).toHaveBeenCalledWith(rdb, 'test')
-  })
-
   it('handles complex dependency graphs', () => {
     const rdb = new Database()
 
     // Base expressions
-    const base1 = ImmList(['base1'])
-    const base2 = ImmList(['base2'])
+    const base1 = expr('base1')
+    const base2 = expr('base2')
 
     // Set base values
     let db = rdb.with(base1, 'value1').with(base2, 'value2')
@@ -178,14 +167,14 @@ describe('ReactiveDatabase', () => {
       return `func2-${val2}`
     }
     const func3 = (db: Database) => {
-      const val1 = db.spyResult([func1])
-      const val2 = db.spyResult([func2])
+      const val1 = db.spyResult(expr(func1))
+      const val2 = db.spyResult(expr(func2))
       return `func3-${val1}-${val2}`
     }
 
-    const dependent1 = ImmList([func1])
-    const dependent2 = ImmList([func2])
-    const dependent3 = ImmList([func3])
+    const dependent1 = expr(func1)
+    const dependent2 = expr(func2)
+    const dependent3 = expr(func3)
 
     // Test initial computation
     expect(db.getResult(dependent1)).toBe('func1-value1')
@@ -201,33 +190,33 @@ describe('ReactiveDatabase', () => {
 
   it('maintains immutability when creating new instances', () => {
     const rdb = new Database()
-    const expr = ImmList(['test'])
+    const e = expr('test')
 
-    const db1 = rdb.with(expr, 'value1')
-    const db2 = db1.with(expr, 'value2')
+    const db1 = rdb.with(e, 'value1')
+    const db2 = db1.with(e, 'value2')
 
     // Each database should have its own state
-    expect(rdb.getResult(expr)).toBeUndefined()
-    expect(db1.getResult(expr)).toBe('value1')
-    expect(db2.getResult(expr)).toBe('value2')
+    expect(rdb.getResult(e)).toBeUndefined()
+    expect(db1.getResult(e)).toBe('value1')
+    expect(db2.getResult(e)).toBe('value2')
 
     // Original databases should be unchanged
-    expect(db1.getResult(expr)).toBe('value1')
+    expect(db1.getResult(e)).toBe('value1')
   })
 
   it('handles function expressions with multiple arguments', () => {
     const rdb = new Database()
     const func = vi.fn((db, arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
-    const expr = [func, 'a', 'b', 'c']
+    const e = expr(func, 'a', 'b', 'c')
 
-    const result = rdb.getResult(expr)
+    const result = rdb.getResult(e)
     expect(result).toBe('a-b-c')
     expect(func).toHaveBeenCalledWith(rdb, 'a', 'b', 'c')
   })
 
   it('handles empty expressions', () => {
     const rdb = new Database()
-    const emptyExpr = ImmList([])
+    const emptyExpr = new Expression(undefined, [])
 
     const result = rdb.getResult(emptyExpr)
     expect(result).toBeUndefined()
@@ -235,9 +224,9 @@ describe('ReactiveDatabase', () => {
 
   it('handles expressions with undefined predicate', () => {
     const rdb = new Database()
-    const expr = [undefined, 'arg']
+    const e = expr(undefined, 'arg')
 
-    const result = rdb.getResult(expr)
+    const result = rdb.getResult(e)
     expect(result).toBeUndefined()
   })
 
@@ -249,15 +238,15 @@ describe('ReactiveDatabase', () => {
       callCount++
       return `computed-${arg}-${callCount}`
     }
-    const expr = [func, 'test']
+    const e = expr(func, 'test')
 
     // First call should compute
-    const result1 = rdb.getResult(expr)
+    const result1 = rdb.getResult(e)
     expect(result1).toBe('computed-test-1')
     expect(callCount).toBe(1)
 
     // Second call should use cache
-    const result2 = rdb.getResult(expr)
+    const result2 = rdb.getResult(e)
     expect(result2).toBe('computed-test-1') // Same result as first call
     expect(callCount).toBe(1) // Function not called again
   })
@@ -266,18 +255,18 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a chain of dependent expressions
-    const baseExpr = ImmList(['counter'])
+    const baseExpr = expr('counter')
     const doubleFunc = (db: Database) => {
       const count = db.spyResult(baseExpr) || 0
       return count * 2
     }
-    const doubleExpr = ImmList([doubleFunc])
+    const doubleExpr = expr(doubleFunc)
 
     const quadrupleFunc = (db: Database) => {
       const doubled = db.spyResult(doubleExpr)
       return doubled * 2
     }
-    const quadrupleExpr = ImmList([quadrupleFunc])
+    const quadrupleExpr = expr(quadrupleFunc)
 
     // Initial state
     let db = rdb.with(baseExpr, 5)
@@ -302,7 +291,7 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     expect(() => {
-      rdb.setDerivative(['test'], 'value')
+      rdb.setDerivative(expr('test'), 'value')
     }).toThrow('setDerivative can only be called during expression computation')
   })
 
@@ -311,19 +300,19 @@ describe('ReactiveDatabase', () => {
 
     const createDerivativeFunc = (db: Database) => {
       const derivativeId = db.getDerivativeId('my-key')
-      db.setDerivative(['derivative-expr', derivativeId], 'derivative-value')
+      db.setDerivative(expr('derivative-expr', derivativeId), 'derivative-value')
       return derivativeId
     }
 
-    const expr = ImmList([createDerivativeFunc])
-    const createdDerivativeId = rdb.getResult(expr)
+    const creatingExpr = expr(createDerivativeFunc)
+    const createdDerivativeId = rdb.getResult(creatingExpr)
 
     expect(createdDerivativeId).toBeInstanceOf(DerivativeId)
-    expect(createdDerivativeId.creatingExpr).toEqual(expr)
+    expect(createdDerivativeId.creatingExpr.equals(creatingExpr)).toBe(true)
     expect(createdDerivativeId.uniqueKey).toBe('my-key')
 
     // The derivative expression should be accessible
-    const derivativeExpr = ImmList(['derivative-expr', createdDerivativeId])
+    const derivativeExpr = expr('derivative-expr', createdDerivativeId)
     expect(rdb.getResult(derivativeExpr)).toBe('derivative-value')
   })
 
@@ -336,11 +325,11 @@ describe('ReactiveDatabase', () => {
       return [id1, id2]
     }
 
-    const expr = ImmList([createDerivativeFunc, 'test-arg'])
-    const [id1, id2] = rdb.getResult(expr)
+    const e = expr(createDerivativeFunc, 'test-arg')
+    const [id1, id2] = rdb.getResult(e)
 
     expect(id1).toEqual(id2)
-    expect(id1.creatingExpr).toEqual(expr)
+    expect(id1.creatingExpr.equals(e)).toBe(true)
     expect(id1.uniqueKey).toBe('same-key')
   })
 
@@ -353,11 +342,11 @@ describe('ReactiveDatabase', () => {
       return [id1, id2]
     }
 
-    const expr1 = ImmList([createDerivativeFunc, 'arg1'])
-    const expr2 = ImmList([createDerivativeFunc, 'arg2'])
+    const e1 = expr(createDerivativeFunc, 'arg1')
+    const e2 = expr(createDerivativeFunc, 'arg2')
 
-    const [id1a, id1b] = rdb.getResult(expr1)
-    const [id2a, id2b] = rdb.getResult(expr2)
+    const [id1a, id1b] = rdb.getResult(e1)
+    const [id2a, id2b] = rdb.getResult(e2)
 
     expect(id1a).not.toEqual(id1b) // different keys
     expect(id1a).not.toEqual(id2a) // different expressions
@@ -370,19 +359,19 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Base expression that the creating function depends on
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     let db = rdb.with(baseExpr, 'initial')
 
     const createDerivativeFunc = (db: Database) => {
       const baseValue = db.spyResult(baseExpr)
       const derivativeId = db.getDerivativeId('dependent-key')
-      db.setDerivative(['derivative', derivativeId, baseValue], `value-${baseValue}`)
+      db.setDerivative(expr('derivative', derivativeId, baseValue), `value-${baseValue}`)
       return derivativeId
     }
 
-    const creatingExpr = ImmList([createDerivativeFunc])
+    const creatingExpr = expr(createDerivativeFunc)
     const derivativeId = db.getResult(creatingExpr)
-    const derivativeExpr = ImmList(['derivative', derivativeId, 'initial'])
+    const derivativeExpr = expr('derivative', derivativeId, 'initial')
 
     expect(db.getResult(derivativeExpr)).toBe('value-initial')
 
@@ -391,7 +380,7 @@ describe('ReactiveDatabase', () => {
 
     // Creating expression should be recomputed with new base value
     const newDerivativeId = db.getResult(creatingExpr)
-    const newDerivativeExpr = ImmList(['derivative', newDerivativeId, 'updated'])
+    const newDerivativeExpr = expr('derivative', newDerivativeId, 'updated')
     expect(db.getResult(newDerivativeExpr)).toBe('value-updated')
   })
 
@@ -400,20 +389,20 @@ describe('ReactiveDatabase', () => {
 
     const createDerivativeFunc = (db: Database) => {
       const derivativeId = db.getDerivativeId('test-key')
-      db.setDerivative(['derivative', derivativeId], 'computed-value')
+      db.setDerivative(expr('derivative', derivativeId), 'computed-value')
       return derivativeId
     }
 
-    const creatingExpr = ImmList([createDerivativeFunc])
+    const creatingExpr = expr(createDerivativeFunc)
     const derivativeId = rdb.getResult(creatingExpr)
 
     // Create an expression that uses the DerivativeId
     const usingFunc = (db: Database) => {
-      const derivativeValue = db.spyResult(['derivative', derivativeId])
+      const derivativeValue = db.spyResult(expr('derivative', derivativeId))
       return `using-${derivativeValue}`
     }
 
-    const usingExpr = ImmList([usingFunc])
+    const usingExpr = expr(usingFunc)
     const result = rdb.getResult(usingExpr)
 
     expect(result).toBe('using-computed-value')
@@ -426,17 +415,17 @@ describe('ReactiveDatabase', () => {
       const id1 = db.getDerivativeId('key1')
       const id2 = db.getDerivativeId('key2')
 
-      db.setDerivative(['deriv1', id1], 'value1')
-      db.setDerivative(['deriv2', id2], 'value2')
+      db.setDerivative(expr('deriv1', id1), 'value1')
+      db.setDerivative(expr('deriv2', id2), 'value2')
 
       return [id1, id2]
     }
 
-    const expr = ImmList([createMultipleDerivativesFunc])
-    const [id1, id2] = rdb.getResult(expr)
+    const e = expr(createMultipleDerivativesFunc)
+    const [id1, id2] = rdb.getResult(e)
 
-    expect(rdb.getResult(['deriv1', id1])).toBe('value1')
-    expect(rdb.getResult(['deriv2', id2])).toBe('value2')
+    expect(rdb.getResult(expr('deriv1', id1))).toBe('value1')
+    expect(rdb.getResult(expr('deriv2', id2))).toBe('value2')
   })
 
   it('handles derivative expressions that contain other DerivativeIds', () => {
@@ -446,24 +435,24 @@ describe('ReactiveDatabase', () => {
       const id1 = db.getDerivativeId('level1')
       const id2 = db.getDerivativeId('level2')
 
-      db.setDerivative(['level1', id1], 'value1')
-      db.setDerivative(['level2', id2, id1], 'value2-with-id1')
+      db.setDerivative(expr('level1', id1), 'value1')
+      db.setDerivative(expr('level2', id2, id1), 'value2-with-id1')
 
       return [id1, id2]
     }
 
-    const expr = ImmList([createNestedDerivativesFunc])
-    const [id1, id2] = rdb.getResult(expr)
+    const e = expr(createNestedDerivativesFunc)
+    const [id1, id2] = rdb.getResult(e)
 
-    expect(rdb.getResult(['level1', id1])).toBe('value1')
-    expect(rdb.getResult(['level2', id2, id1])).toBe('value2-with-id1')
+    expect(rdb.getResult(expr('level1', id1))).toBe('value1')
+    expect(rdb.getResult(expr('level2', id2, id1))).toBe('value2-with-id1')
   })
 
   it('regular expressions can depend on derivative expressions set within their own computation', () => {
     const rdb = new Database()
 
     // Create a base expression
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     let db = rdb.with(baseExpr, 'base-value')
 
     // Create a combined function that creates a derivative expression and also depends on it
@@ -471,14 +460,14 @@ describe('ReactiveDatabase', () => {
       // Create the derivative
       const baseValue = db.spyResult(baseExpr)
       const derivativeId = db.getDerivativeId('derived')
-      db.setDerivative(['derived-expr', derivativeId], `derived-${baseValue}`)
+      db.setDerivative(expr('derived-expr', derivativeId), `derived-${baseValue}`)
 
       // Now depend on the derivative
-      const derivedValue = db.spyResult(['derived-expr', derivativeId])
+      const derivedValue = db.spyResult(expr('derived-expr', derivativeId))
       return `dependent-${derivedValue}`
     }
 
-    const combinedExpr = ImmList([combinedFunc])
+    const combinedExpr = expr(combinedFunc)
     const result = db.getResult(combinedExpr)
 
     expect(result).toBe('dependent-derived-base-value')
@@ -492,16 +481,16 @@ describe('ReactiveDatabase', () => {
   it('handles A -> B -> C dependencies when A creates a derivative ID and sets an expression with it, C depends on that expression, and C is evaluated before A', () => {
     const rdb = new Database()
 
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     let db = rdb.with(baseExpr, 'base-value')
     let storedDerivativeId
 
     const predicateC = (db: Database, derivativeId: DerivativeId) => {
-      return db.spyResult(['derived-expr', derivativeId])
+      return db.spyResult(expr('derived-expr', derivativeId))
     }
 
     const predicateB = (db: Database, derivativeId: DerivativeId) => {
-      return db.spyResult([predicateC, derivativeId])
+      return db.spyResult(expr(predicateC, derivativeId))
     }
 
     const predicateA = (db: Database) => {
@@ -509,12 +498,12 @@ describe('ReactiveDatabase', () => {
       const derivativeId = db.getDerivativeId('through-predicate-c')
       storedDerivativeId = derivativeId
 
-      db.setDerivative(['derived-expr', derivativeId], `derived-${baseValue}`)
+      db.setDerivative(expr('derived-expr', derivativeId), `derived-${baseValue}`)
 
-      return db.spyResult([predicateB, derivativeId])
+      return db.spyResult(expr(predicateB, derivativeId))
     }
 
-    const exprA = ImmList([predicateA])
+    const exprA = expr(predicateA)
 
     expect(db.getResult(exprA)).toBe('derived-base-value')
 
@@ -524,8 +513,8 @@ describe('ReactiveDatabase', () => {
     
     // Try changing the base value and calling the predicate chain from B first
     db = db.with(baseExpr, 'base-value-3')
-    expect(db.getResult([predicateC, storedDerivativeId])).toBe('derived-base-value-3')
-    expect(db.getResult([predicateB, storedDerivativeId])).toBe('derived-base-value-3')
+    expect(db.getResult(expr(predicateC, storedDerivativeId))).toBe('derived-base-value-3')
+    expect(db.getResult(expr(predicateB, storedDerivativeId))).toBe('derived-base-value-3')
     expect(db.getResult(exprA)).toBe('derived-base-value-3')
   })
 
@@ -533,8 +522,8 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create base expressions
-    const base1 = ImmList(['base1'])
-    const base2 = ImmList(['base2'])
+    const base1 = expr('base1')
+    const base2 = expr('base2')
     let db = rdb.with(base1, 'value1').with(base2, 'value2')
 
     // Create a function that creates a derivative depending on regular expressions
@@ -542,19 +531,19 @@ describe('ReactiveDatabase', () => {
       const val1 = db.spyResult(base1)
       const val2 = db.spyResult(base2)
       const derivativeId = db.getDerivativeId('combined')
-      db.setDerivative(['combined', derivativeId], `${val1}-${val2}`)
+      db.setDerivative(expr('combined', derivativeId), `${val1}-${val2}`)
       return derivativeId
     }
 
-    const creatingExpr = ImmList([createDerivativeFunc])
+    const creatingExpr = expr(createDerivativeFunc)
 
     // Create a function that accesses the derivative
     const accessDerivativeFunc = (db: Database) => {
       const derivativeId = db.spyResult(creatingExpr)
-      return db.spyResult(['combined', derivativeId])
+      return db.spyResult(expr('combined', derivativeId))
     }
 
-    const accessExpr = ImmList([accessDerivativeFunc])
+    const accessExpr = expr(accessDerivativeFunc)
     expect(db.getResult(accessExpr)).toBe('value1-value2')
 
     // Update base1 and verify derivative is recomputed
@@ -566,8 +555,8 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Base expressions
-    const baseA = ImmList(['baseA'])
-    const baseB = ImmList(['baseB'])
+    const baseA = expr('baseA')
+    const baseB = expr('baseB')
     let db = rdb.with(baseA, 'A').with(baseB, 'B')
 
     // Level 1: Regular expression depending on base
@@ -575,24 +564,24 @@ describe('ReactiveDatabase', () => {
       const a = db.spyResult(baseA)
       return `level1-${a}`
     }
-    const level1Expr = ImmList([level1Func])
+    const level1Expr = expr(level1Func)
 
     // Level 2: Derivative depending on level 1
     const level2Func = (db: Database) => {
       const l1 = db.spyResult(level1Expr)
       const derivativeId = db.getDerivativeId('level2')
-      db.setDerivative(['level2-expr', derivativeId], `level2-${l1}`)
+      db.setDerivative(expr('level2-expr', derivativeId), `level2-${l1}`)
       return derivativeId
     }
-    const level2Expr = ImmList([level2Func])
+    const level2Expr = expr(level2Func)
 
     // Level 3: Regular expression depending on level 2 derivative
     const level3Func = (db: Database) => {
       const derivativeId = db.spyResult(level2Expr)
-      const l2 = db.spyResult(['level2-expr', derivativeId])
+      const l2 = db.spyResult(expr('level2-expr', derivativeId))
       return `level3-${l2}`
     }
-    const level3Expr = ImmList([level3Func])
+    const level3Expr = expr(level3Func)
 
     // Test initial state
     expect(db.getResult(level3Expr)).toBe('level3-level2-level1-A')
@@ -606,38 +595,38 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a base value that the derivative depends on
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     let db = rdb.with(baseExpr, 'initial')
 
     const createDerivativeFunc = (db: Database) => {
       const baseValue = db.spyResult(baseExpr)
       const derivativeId = db.getDerivativeId('shared')
-      db.setDerivative(['shared-deriv', derivativeId], `shared-${baseValue}`)
+      db.setDerivative(expr('shared-deriv', derivativeId), `shared-${baseValue}`)
       return derivativeId
     }
 
-    const creatingExpr = ImmList([createDerivativeFunc])
+    const creatingExpr = expr(createDerivativeFunc)
 
     // Create multiple dependent expressions that get the current derivativeId
     const dep1Func = (db: Database) => {
       const currentId = db.spyResult(creatingExpr)
-      const value = db.spyResult(['shared-deriv', currentId])
+      const value = db.spyResult(expr('shared-deriv', currentId))
       return `dep1-${value}`
     }
     const dep2Func = (db: Database) => {
       const currentId = db.spyResult(creatingExpr)
-      const value = db.spyResult(['shared-deriv', currentId])
+      const value = db.spyResult(expr('shared-deriv', currentId))
       return `dep2-${value}`
     }
     const dep3Func = (db: Database) => {
       const currentId = db.spyResult(creatingExpr)
-      const value = db.spyResult(['shared-deriv', currentId])
+      const value = db.spyResult(expr('shared-deriv', currentId))
       return `dep3-${value}`
     }
 
-    const dep1Expr = ImmList([dep1Func])
-    const dep2Expr = ImmList([dep2Func])
-    const dep3Expr = ImmList([dep3Func])
+    const dep1Expr = expr(dep1Func)
+    const dep2Expr = expr(dep2Func)
+    const dep3Expr = expr(dep3Func)
 
     expect(db.getResult(dep1Expr)).toBe('dep1-shared-initial')
     expect(db.getResult(dep2Expr)).toBe('dep2-shared-initial')
@@ -654,78 +643,78 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a base value that the first derivative depends on
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     let db = rdb.with(baseExpr, 'initial')
 
     // Expression A: creates first derivative depending on base
     const createFirstFunc = (db: Database) => {
       const baseValue = db.spyResult(baseExpr)
       const id1 = db.getDerivativeId('first')
-      db.setDerivative(['first', id1], `first-${baseValue}`)
+      db.setDerivative(expr('first', id1), `first-${baseValue}`)
       return id1
     }
-    const exprA = ImmList([createFirstFunc])
+    const exprA = expr(createFirstFunc)
 
     // Expression B: creates second derivative depending on first
     const createSecondFunc = (db: Database) => {
       const id1 = db.spyResult(exprA)
-      const firstValue = db.spyResult(['first', id1])
+      const firstValue = db.spyResult(expr('first', id1))
       const id2 = db.getDerivativeId('second')
-      db.setDerivative(['second', id2], `second-${firstValue}`)
+      db.setDerivative(expr('second', id2), `second-${firstValue}`)
       return id2
     }
-    const exprB = ImmList([createSecondFunc])
+    const exprB = expr(createSecondFunc)
 
     // Expression C: creates third derivative depending on second
     const createThirdFunc = (db: Database) => {
       const id2 = db.spyResult(exprB)
-      const secondValue = db.spyResult(['second', id2])
+      const secondValue = db.spyResult(expr('second', id2))
       const id3 = db.getDerivativeId('third')
-      db.setDerivative(['third', id3], `third-${secondValue}`)
+      db.setDerivative(expr('third', id3), `third-${secondValue}`)
       return id3
     }
-    const exprC = ImmList([createThirdFunc])
+    const exprC = expr(createThirdFunc)
 
     const id3 = db.getResult(exprC)
-    expect(db.getResult(['third', id3])).toBe('third-second-first-initial')
-    expect(db.getResult(['second', db.getResult(exprB)])).toBe('second-first-initial')
-    expect(db.getResult(['first', db.getResult(exprA)])).toBe('first-initial')
+    expect(db.getResult(expr('third', id3))).toBe('third-second-first-initial')
+    expect(db.getResult(expr('second', db.getResult(exprB)))).toBe('second-first-initial')
+    expect(db.getResult(expr('first', db.getResult(exprA)))).toBe('first-initial')
 
     // Change the base value and verify the entire chain updates
     db = db.with(baseExpr, 'changed')
     const newId3 = db.getResult(exprC)
-    expect(db.getResult(['third', newId3])).toBe('third-second-first-changed')
-    expect(db.getResult(['second', db.getResult(exprB)])).toBe('second-first-changed')
-    expect(db.getResult(['first', db.getResult(exprA)])).toBe('first-changed')
+    expect(db.getResult(expr('third', newId3))).toBe('third-second-first-changed')
+    expect(db.getResult(expr('second', db.getResult(exprB)))).toBe('second-first-changed')
+    expect(db.getResult(expr('first', db.getResult(exprA)))).toBe('first-changed')
   })
 
   it('old derivative expressions are unset when creating expression recomputes', () => {
     const rdb = new Database()
 
     // Create a base value
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     let db = rdb.with(baseExpr, 'initial')
 
     // Create a function that produces a derivative depending on the base value
     const createDerivativeFunc = (db: Database) => {
       const baseValue = db.spyResult(baseExpr)
       const derivativeId = db.getDerivativeId('dependent')
-      db.setDerivative(['deriv', derivativeId, baseValue], `value-${baseValue}`)
+      db.setDerivative(expr('deriv', derivativeId, baseValue), `value-${baseValue}`)
       return derivativeId
     }
 
-    const creatingExpr = ImmList([createDerivativeFunc])
+    const creatingExpr = expr(createDerivativeFunc)
     const derivativeId = db.getResult(creatingExpr)
 
     // Access the derivative expression
-    const oldDerivativeExpr = ImmList(['deriv', derivativeId, 'initial'])
+    const oldDerivativeExpr = expr('deriv', derivativeId, 'initial')
     expect(db.getResult(oldDerivativeExpr)).toBe('value-initial')
 
     // Change the base value
     db = db.with(baseExpr, 'changed')
 
     // The new derivative expression should be accessible
-    const newDerivativeExpr = ImmList(['deriv', derivativeId, 'changed'])
+    const newDerivativeExpr = expr('deriv', derivativeId, 'changed')
     expect(db.getResult(newDerivativeExpr)).toBe('value-changed')
 
     // The old derivative expression should have been invalidated and not replaced
@@ -744,19 +733,19 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a cascading predicate that sets a related expression
-    const parentSetter = (db: Database, expr: ImmList<any>, result: any) => {
-      const childId = expr.get(1)
+    const parentSetter = (db: Database, e: Expression, result: any) => {
+      const childId = e.args[0]
       const parentId = result
-      db.setDerivative(['CHILD', parentId], childId)
+      db.setDerivative(expr('CHILD', parentId), childId)
     }
     const PARENT = new CascadingPredicate(parentSetter)
 
     // Set a parent relationship
-    const parentExpr = ImmList([PARENT, 'B'])
+    const parentExpr = expr(PARENT, 'B')
     const db1 = rdb.with(parentExpr, 'A')
 
     // Check that the child relationship was automatically set
-    const childExpr = ImmList(['CHILD', 'A'])
+    const childExpr = expr('CHILD', 'A')
     expect(db1.getResult(childExpr)).toBe('B')
   })
 
@@ -764,65 +753,65 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create cascading predicates for a chain: PARENT -> CHILD -> GRANDCHILD
-    const parentSetter = (db: Database, expr: ImmList<any>, result: any) => {
-      const childId = expr.get(1)
+    const parentSetter = (db: Database, e: Expression, result: any) => {
+      const childId = e.args[0]
       const parentId = result
-      db.setDerivative([CHILD, parentId], childId)
+      db.setDerivative(expr(CHILD, parentId), childId)
     }
-    const childSetter = (db: Database, expr: ImmList<any>, result: any) => {
-      const parentId = expr.get(1)
+    const childSetter = (db: Database, e: Expression, result: any) => {
+      const parentId = e.args[0]
       const grandchildId = `grandchild-of-${parentId}`
-      db.setDerivative(['GRANDCHILD', parentId], grandchildId)
+      db.setDerivative(expr('GRANDCHILD', parentId), grandchildId)
     }
 
     const PARENT = new CascadingPredicate(parentSetter)
     const CHILD = new CascadingPredicate(childSetter)
 
     // Set a parent relationship
-    const parentExpr = ImmList([PARENT, 'B'])
+    const parentExpr = expr(PARENT, 'B')
     const db1 = rdb.with(parentExpr, 'A')
 
     // Check the full cascade
-    expect(db1.getResult([CHILD, 'A'])).toBe('B')
-    expect(db1.getResult(['GRANDCHILD', 'A'])).toBe('grandchild-of-A')
+    expect(db1.getResult(expr(CHILD, 'A'))).toBe('B')
+    expect(db1.getResult(expr('GRANDCHILD', 'A'))).toBe('grandchild-of-A')
   })
 
   it('includes cascaded expressions in affected expressions', () => {
     const rdb = new Database()
 
     // Create a cascading predicate
-    const setter = (db: Database, expr: ImmList<any>, result: any) => {
-      db.setDerivative(['CASCADE_TARGET', result], 'cascaded-value')
+    const setter = (db: Database, e: Expression, result: any) => {
+      db.setDerivative(expr('CASCADE_TARGET', result), 'cascaded-value')
     }
     const CASCADE_PRED = new CascadingPredicate(setter)
 
     // Set an expression with the cascading predicate
-    const cascadeExpr = ImmList([CASCADE_PRED, 'source'])
+    const cascadeExpr = expr(CASCADE_PRED, 'source')
     const [newDb, affectedExprs] = rdb.withGetAffectedRels(cascadeExpr, 'target-value')
 
     // Check that the original expression is affected
     expect(affectedExprs.has(cascadeExpr)).toBe(true)
-    expect(affectedExprs.has(ImmList(['CASCADE_TARGET', 'target-value'])))
+    expect(affectedExprs.has(expr('CASCADE_TARGET', 'target-value')))
   })
 
   it('cascading predicates work with reactive dependencies', () => {
     const rdb = new Database()
 
     // Create a cascading predicate
-    const setter = (db: Database, expr: ImmList<any>, result: any) => {
-      db.setDerivative(['AUTO_SET', result], `auto-${result}`)
+    const setter = (db: Database, e: Expression, result: any) => {
+      db.setDerivative(expr('AUTO_SET', result), `auto-${result}`)
     }
     const CASCADE_PRED = new CascadingPredicate(setter)
 
     // Create a dependent expression that relies on the cascaded value
     const dependentFunc = (db: Database) => {
-      const autoValue = db.spyResult(['AUTO_SET', 'key'])
+      const autoValue = db.spyResult(expr('AUTO_SET', 'key'))
       return `dependent-${autoValue}`
     }
-    const dependentExpr = ImmList([dependentFunc])
+    const dependentExpr = expr(dependentFunc)
 
     // Set the cascading expression
-    const cascadeExpr = ImmList([CASCADE_PRED, 'trigger'])
+    const cascadeExpr = expr(CASCADE_PRED, 'trigger')
     const db1 = rdb.with(cascadeExpr, 'key')
 
     // Check that the dependent expression gets the cascaded value
@@ -833,22 +822,22 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a cascading predicate that sets multiple expressions
-    const multiSetter = (db: Database, expr: ImmList<any>, result: any) => {
-      const id = expr.get(1)
-      db.setDerivative(['FORWARD', id], result)
-      db.setDerivative(['REVERSE', result], id)
-      db.setDerivative(['META', id, result], 'linked')
+    const multiSetter = (db: Database, e: Expression, result: any) => {
+      const id = e.args[0]
+      db.setDerivative(expr('FORWARD', id), result)
+      db.setDerivative(expr('REVERSE', result), id)
+      db.setDerivative(expr('META', id, result), 'linked')
     }
     const BI_DIR = new CascadingPredicate(multiSetter)
 
     // Set the bidirectional relationship
-    const biExpr = ImmList([BI_DIR, 'A'])
+    const biExpr = expr(BI_DIR, 'A')
     const db1 = rdb.with(biExpr, 'B')
 
     // Check all cascaded expressions were set
-    expect(db1.getResult(['FORWARD', 'A'])).toBe('B')
-    expect(db1.getResult(['REVERSE', 'B'])).toBe('A')
-    expect(db1.getResult(['META', 'A', 'B'])).toBe('linked')
+    expect(db1.getResult(expr('FORWARD', 'A'))).toBe('B')
+    expect(db1.getResult(expr('REVERSE', 'B'))).toBe('A')
+    expect(db1.getResult(expr('META', 'A', 'B'))).toBe('linked')
   })
 
   /* TODO: Find a way to track things such that setters can spy other expression results and dependencies will 
@@ -882,44 +871,44 @@ describe('ReactiveDatabase', () => {
 
   it('withModified creates new database with modified expression result', () => {
     const rdb = new Database()
-    const expr = ImmList(['test', 'arg'])
+    const e = expr('test', 'arg')
     const initialResult = 'initial-value'
 
     // Set initial value
-    const db1 = rdb.with(expr, initialResult)
+    const db1 = rdb.with(e, initialResult)
 
     // Modify the expression using withModified
     const modifier = (oldVal: any) => `modified-${oldVal}`
-    const db2 = db1.withModified(expr, modifier)
+    const db2 = db1.withModified(e, modifier)
 
     expect(db2).toBeInstanceOf(Database)
     expect(db2).not.toBe(db1) // Should be a new instance
-    expect(db1.getResult(expr)).toBe(initialResult) // Original unchanged
-    expect(db2.getResult(expr)).toBe('modified-initial-value') // Modified in new db
+    expect(db1.getResult(e)).toBe(initialResult) // Original unchanged
+    expect(db2.getResult(e)).toBe('modified-initial-value') // Modified in new db
   })
 
   it('withModifiedGetAffectedRels returns affected expressions', () => {
     const rdb = new Database()
-    const expr = ImmList(['test', 'arg'])
+    const e = expr('test', 'arg')
     const initialResult = 'initial-value'
 
     // Set initial value
-    const db1 = rdb.with(expr, initialResult)
+    const db1 = rdb.with(e, initialResult)
 
     // Modify the expression using withModifiedGetAffectedRels
     const modifier = (oldVal: any) => `modified-${oldVal}`
-    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(expr, modifier)
+    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(e, modifier)
 
     expect(db2).toBeInstanceOf(Database)
-    expect(affectedExprs.has(expr)).toBe(true)
-    expect(db2.getResult(expr)).toBe('modified-initial-value')
+    expect(affectedExprs.has(e)).toBe(true)
+    expect(db2.getResult(e)).toBe('modified-initial-value')
   })
 
   it('withModified invalidates dependent expressions', () => {
     const rdb = new Database()
 
     // Set up base expression
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const db1 = rdb.with(baseExpr, 'original')
 
     // Create dependent expression
@@ -927,7 +916,7 @@ describe('ReactiveDatabase', () => {
       const baseValue = db.spyResult(baseExpr)
       return `dependent-${baseValue}`
     }
-    const dependentExpr = ImmList([dependentFunc])
+    const dependentExpr = expr(dependentFunc)
 
     // Compute dependent result
     const result1 = db1.getResult(dependentExpr)
@@ -944,20 +933,20 @@ describe('ReactiveDatabase', () => {
 
   it('withModified handles undefined initial values', () => {
     const rdb = new Database()
-    const expr = ImmList(['nonexistent'])
+    const e = expr('nonexistent')
 
     // Modify an expression that doesn't have a result (undefined)
     const modifier = (oldVal: any) => oldVal === undefined ? 'default-value' : `modified-${oldVal}`
-    const db2 = rdb.withModified(expr, modifier)
+    const db2 = rdb.withModified(e, modifier)
 
-    expect(db2.getResult(expr)).toBe('default-value')
+    expect(db2.getResult(e)).toBe('default-value')
   })
 
   it('withModifiedGetAffectedRels includes dependent expressions in affected set', () => {
     const rdb = new Database()
 
     // Set up base expression
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const db1 = rdb.with(baseExpr, 'original')
 
     // Create dependent expression
@@ -965,7 +954,7 @@ describe('ReactiveDatabase', () => {
       const baseValue = db.spyResult(baseExpr)
       return `dependent-${baseValue}`
     }
-    const dependentExpr = ImmList([dependentFunc])
+    const dependentExpr = expr(dependentFunc)
 
     // Compute dependent to establish dependency
     db1.getResult(dependentExpr)
@@ -981,24 +970,24 @@ describe('ReactiveDatabase', () => {
 
   it('withModified maintains immutability across multiple modifications', () => {
     const rdb = new Database()
-    const expr = ImmList(['counter'])
+    const e = expr('counter')
 
-    const db1 = rdb.with(expr, 0)
-    const db2 = db1.withModified(expr, val => val + 1)
-    const db3 = db2.withModified(expr, val => val * 2)
-    const db4 = db3.withModified(expr, val => val - 3)
+    const db1 = rdb.with(e, 0)
+    const db2 = db1.withModified(e, val => val + 1)
+    const db3 = db2.withModified(e, val => val * 2)
+    const db4 = db3.withModified(e, val => val - 3)
 
     // Each database should have its own state
-    expect(rdb.getResult(expr)).toBeUndefined()
-    expect(db1.getResult(expr)).toBe(0)
-    expect(db2.getResult(expr)).toBe(1)
-    expect(db3.getResult(expr)).toBe(2)
-    expect(db4.getResult(expr)).toBe(-1)
+    expect(rdb.getResult(e)).toBeUndefined()
+    expect(db1.getResult(e)).toBe(0)
+    expect(db2.getResult(e)).toBe(1)
+    expect(db3.getResult(e)).toBe(2)
+    expect(db4.getResult(e)).toBe(-1)
 
     // Original databases should be unchanged
-    expect(db1.getResult(expr)).toBe(0)
-    expect(db2.getResult(expr)).toBe(1)
-    expect(db3.getResult(expr)).toBe(2)
+    expect(db1.getResult(e)).toBe(0)
+    expect(db2.getResult(e)).toBe(1)
+    expect(db3.getResult(e)).toBe(2)
   })
 
   it('caches and rethrows the same error instance', () => {
@@ -1007,18 +996,18 @@ describe('ReactiveDatabase', () => {
       throw new Error('boom')
     })
 
-    const expr = ImmList([throwingFunc])
+    const e = expr(throwingFunc)
 
     let firstError
     try {
-      db.getResult(expr)
+      db.getResult(e)
     } catch (err) {
       firstError = err
     }
 
     let secondError
     try {
-      db.getResult(expr)
+      db.getResult(e)
     } catch (err) {
       secondError = err
     }
@@ -1030,7 +1019,7 @@ describe('ReactiveDatabase', () => {
 
   it('invalidates cached errors when dependencies change', () => {
     const db = new Database()
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const throwingFunc = vi.fn((db: Database) => {
       const value = db.spyResult(baseExpr)
       if (value === 'bad') {
@@ -1039,19 +1028,19 @@ describe('ReactiveDatabase', () => {
       return `ok-${value}`
     })
 
-    const expr = ImmList([throwingFunc])
+    const e = expr(throwingFunc)
     const db2 = db.with(baseExpr, 'bad')
 
     let firstError
     try {
-      db2.getResult(expr)
+      db2.getResult(e)
     } catch (err) {
       firstError = err
     }
 
     let secondError
     try {
-      db2.getResult(expr)
+      db2.getResult(e)
     } catch (err) {
       secondError = err
     }
@@ -1061,15 +1050,15 @@ describe('ReactiveDatabase', () => {
     expect(throwingFunc).toHaveBeenCalledTimes(1)
 
     const db3 = db2.with(baseExpr, 'good')
-    expect(db3.getResult(expr)).toBe('ok-good')
+    expect(db3.getResult(e)).toBe('ok-good')
     expect(throwingFunc).toHaveBeenCalledTimes(2)
   })
 
   it('propagates errors set by withError to dependent expressions', () => {
     const db = new Database()
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const dependentFunc = vi.fn((db: Database) => `dep-${db.spyResult(baseExpr)}`)
-    const dependentExpr = ImmList([dependentFunc])
+    const dependentExpr = expr(dependentFunc)
 
     const db1 = db.with(baseExpr, 'ok')
     expect(db1.getResult(dependentExpr)).toBe('dep-ok')
@@ -1089,7 +1078,7 @@ describe('ReactiveDatabase', () => {
 
   it('allows dependent predicates to catch errors', () => {
     const db = new Database()
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const innerError = new Error('inner')
     const innerFunc = vi.fn((db: Database) => {
       const value = db.spyResult(baseExpr)
@@ -1100,23 +1089,23 @@ describe('ReactiveDatabase', () => {
     })
     const outerFunc = vi.fn((db: Database) => {
       try {
-        return `outer-${db.spyResult([innerFunc])}`
+        return `outer-${db.spyResult(expr(innerFunc))}`
       } catch (err) {
         return 'outer-fallback'
       }
     })
 
     const db2 = db.with(baseExpr, 'good')
-    expect(db2.getResult([outerFunc])).toBe('outer-inner-good')
+    expect(db2.getResult(expr(outerFunc))).toBe('outer-inner-good')
 
     const db3 = db2.with(baseExpr, 'bad')
-    expect(db3.getResult([outerFunc])).toBe('outer-fallback')
+    expect(db3.getResult(expr(outerFunc))).toBe('outer-fallback')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 
   it('propagates errors through dependent expressions', () => {
     const rdb = new Database()
-    const baseExpr = ImmList(['base'])
+    const baseExpr = expr('base')
     const innerError = new Error('inner')
     const innerFunc = vi.fn((db: Database) => {
       const value = db.spyResult(baseExpr)
@@ -1125,12 +1114,12 @@ describe('ReactiveDatabase', () => {
       }
       return `inner-${value}`
     })
-    const outerFunc = vi.fn((db: Database) => `outer-${db.spyResult([innerFunc])}`)
+    const outerFunc = vi.fn((db: Database) => `outer-${db.spyResult(expr(innerFunc))}`)
 
     let db = rdb.with(baseExpr, 'bad')
     let caughtError
     try {
-      db.getResult([outerFunc])
+      db.getResult(expr(outerFunc))
     } catch (err) {
       caughtError = err
     }
@@ -1139,7 +1128,7 @@ describe('ReactiveDatabase', () => {
 
     let cachedError
     try {
-      db.getResult([outerFunc])
+      db.getResult(expr(outerFunc))
     } catch (err) {
       cachedError = err
     }
@@ -1147,7 +1136,7 @@ describe('ReactiveDatabase', () => {
     expect(cachedError).toBe(innerError)
 
     db = db.with(baseExpr, 'good')
-    expect(db.getResult([outerFunc])).toBe('outer-inner-good')
+    expect(db.getResult(expr(outerFunc))).toBe('outer-inner-good')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 })
