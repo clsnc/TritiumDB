@@ -3,15 +3,18 @@ import { AsyncCallIncompleteError, asyncCallResult, AsyncCallStatus, asyncCallSt
 
 export type Value = any
 
-export class Expression<P = any, A extends any[] = any[]> implements ValueObject {
+type ExprArgs<P extends (...args: any[]) => any> =
+    Parameters<P> extends [Database, ...infer Rest] ? Rest : any[]
+
+export class Expression<P extends (db: Database, ...args: any[]) => any = (db: Database, ...args: any[]) => any> implements ValueObject {
     private readonly _list: ImmList<any>
 
-    constructor(pred: P, args: A) {
+    constructor(pred: P, args: ExprArgs<P>) {
         this._list = ImmList([pred, ...args])
     }
 
     get pred(): P { return this._list.get(0) as P }
-    get args(): A { return this._list.shift().toArray() as A }
+    get args(): ExprArgs<P> { return this._list.shift().toArray() as ExprArgs<P> }
 
     hashCode(): number { return this._list.hashCode() }
 
@@ -22,8 +25,10 @@ export class Expression<P = any, A extends any[] = any[]> implements ValueObject
     [Symbol.iterator](): Iterator<any> { return this._list[Symbol.iterator]() }
 }
 
-export function expr<P, A extends any[]>(pred: P, ...args: A): Expression<P, A> {
-    return new Expression(pred, args)
+export function expr<P extends (db: Database, ...args: any[]) => any>(
+    pred: P, ...args: ExprArgs<P>
+): Expression<P> {
+    return new Expression(pred, args as any)
 }
 
 export class DerivativeId extends Record({
@@ -139,12 +144,6 @@ export class Database {
             }
         }
 
-        // If there is no cached result or error but the predicate is a function, compute the result and return that
-        const pred = expr.pred
-        if (typeof pred === "function") {
-            return this.updateExprCacheAndGetResult(expr)
-        }
-
         // Check if any terms in the expression are derivative IDs and recompute their creating expressions if needed
         /* TODO: It is possible for derivative expressions to be set using derivative IDs that were created during the computation 
            of other expressions. In those cases, this will fail to compute the expression needed to set the derivative expression. 
@@ -154,7 +153,7 @@ export class Database {
         for (const term of expr) {
             if (term instanceof DerivativeId) {
                 const creatingExpr = term.creatingExpr
-                if (!this.exprToCachedResult.has(creatingExpr)) {
+                if (!this.exprToCachedResult.has(creatingExpr) && !this.currentlyComputingExprs.has(creatingExpr)) {
                     try {
                         // Recompute the creating expression so it can set the derivative expression
                         this.getResult(creatingExpr)
@@ -181,16 +180,22 @@ export class Database {
             }
         }
 
-        // After checking derivative IDs, return the cached result, or undefined if it still doesn't exist
+        // After checking derivative IDs, return the cached result if it exists
         // TODO: Add proper handling for cases when the cached result is an error
-        return this.exprToCachedResult.get(expr)?.value
+        const cachedAfterDerivativeIdCheck = this.exprToCachedResult.get(expr)
+        if(cachedAfterDerivativeIdCheck) {
+            return cachedAfterDerivativeIdCheck.value
+        }
+
+        // If there is still no cached result, compute and cache one using the predicate function
+        return this.updateExprCacheAndGetResult(expr)
     }
 
     protected setDeepestComputingExpr(expr: Expression | null): void {
         this.currentDeepestComputingExpr = expr
     }
 
-    setDerivative(expr: Expression, result: Value): void {
+    setDerivative<P extends (...args: any[]) => any>(expr: Expression<P>, result: ReturnType<P>): void {
         if (this.currentDeepestComputingExpr === null) {
             throw new Error("setDerivative can only be called during expression computation")
         }
@@ -218,7 +223,7 @@ export class Database {
         return affectedExprs
     }
 
-    spyAsyncEffectResult<Pred extends (...args: any[]) => Promise<any>>(expr: Expression<Pred, any[]>): Awaited<ReturnType<Pred>>
+    spyAsyncEffectResult<Pred extends (...args: any[]) => Promise<any>>(expr: Expression<Pred>): Awaited<ReturnType<Pred>>
     spyAsyncEffectResult(expr: Expression): any
     spyAsyncEffectResult(expr: Expression): any {
         const callStatus = this.spyResult(new Expression(asyncCallStatus, [expr.pred, ...expr.args]))
@@ -231,7 +236,7 @@ export class Database {
         }
     }
 
-    spyResult<P extends (...args: any[]) => any>(expr: Expression<P, any[]>): ReturnType<P>
+    spyResult<P extends (...args: any[]) => any>(expr: Expression<P>): ReturnType<P>
     spyResult(expr: Expression): any
     spyResult(expr: Expression): any {
         /* If there is a currently computing expression, then that expression must depend on the one 
@@ -291,12 +296,12 @@ export class Database {
         }
     }
 
-    with(expr: Expression, result: Value): Database {
+    with<P extends (...args: any[]) => any>(expr: Expression<P>, result: ReturnType<P>): Database {
         // Return just the new database
         return this.withGetAffectedRels(expr, result)[0]
     }
 
-    withError(expr: Expression, err: Value): Database {
+    withError<P extends (...args: any[]) => any>(expr: Expression<P>, err: any): Database {
         // Return just the new database
         return this.withErrorGetAffectedRels(expr, err)[0]
     }
@@ -305,7 +310,7 @@ export class Database {
         return this.withResultGetAffectedRels(expr, new ExpressionResult(err, false))
     }
 
-    withGetAffectedRels(expr: Expression, resVal: Value): [Database, ImmSet<Expression>] {
+    withGetAffectedRels<P extends (...args: any[]) => any>(expr: Expression<P>, resVal: ReturnType<P>): [Database, ImmSet<Expression>] {
         return this.withResultGetAffectedRels(expr, new ExpressionResult(resVal, true))
     }
 
@@ -323,12 +328,12 @@ export class Database {
         return [newDb, affectedRels]
     }
 
-    withModified(expr: Expression, modifier: (val: Value) => Value): Database {
+    withModified<P extends (...args: any[]) => any>(expr: Expression<P>, modifier: (val: ReturnType<P>) => ReturnType<P>): Database {
         // Return just the new database
         return this.withModifiedGetAffectedRels(expr, modifier)[0]
     }
 
-    withModifiedGetAffectedRels(expr: Expression, modifier: (oldResult: Value) => Value): [Database, ImmSet<Expression>] {
+    withModifiedGetAffectedRels<P extends (...args: any[]) => any>(expr: Expression<P>, modifier: (oldResult: ReturnType<P>) => ReturnType<P>): [Database, ImmSet<Expression>] {
         // The new result is the old result with the modifier function applied to it
         const newResult = modifier(this.getResult(expr))
         return this.withGetAffectedRels(expr, newResult)

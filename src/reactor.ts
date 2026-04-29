@@ -21,7 +21,7 @@ export class Reactor {
     ensureAsyncRun<T extends (...args: any[]) => Promise<any>>(func: T, ...args: Parameters<T>): ReturnType<T> {
         // If a call has not already been initiated, initiate it
         const currStatus = this.db.getResult(expr(ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args))
-        if (currStatus === undefined) {
+        if (currStatus === AsyncCallStatus.NotStarted) {
             // Set the executing status immediately
             this.set(expr(ASYNC_CALL_STATUS_INTERNAL_PRED, func, ...args), AsyncCallStatus.Executing)
             
@@ -92,7 +92,10 @@ export class Reactor {
                     // Awaiting prevents the loop from repeatedly ensuring the same dependency
                     try {
                         const incompleteExpr = (err as AsyncCallIncompleteError).incompleteExpr
-                        await this.ensureAsyncRun(incompleteExpr.pred, ...incompleteExpr.args)
+                        
+                        /* AsyncCallIncompleteError is only thrown by spyAsyncEffectResult, which only operates on async function expressions,
+                           so the return type is guaranteed to be a Promise. */
+                        await this.ensureAsyncRun(incompleteExpr.pred as (...args: any[]) => Promise<any>, ...incompleteExpr.args)
                     } catch(_) {
                         // Nothing needs to be done here if the async call throws an error. How that is handled is up to the calling predicate function.
                     }
