@@ -99,16 +99,16 @@ export class Database {
 
     protected clearExprDependencies(expr: Expression): void {
         // Get the contributing expressions for this expression
-        const contributorKeys = this.exprToContributorExprs.get(expr)
+        const contributorExprs = this.exprToContributorExprs.get(expr)
 
         // Remove this expression's contributor relationships
         this.exprToContributorExprs = this.exprToContributorExprs.delete(expr)
 
         // Remove this expression from each contributor's dependency tracking
-        contributorKeys?.forEach(contributorKey => {
-            this.exprToDependentExprs = this.exprToDependentExprs.update(contributorKey, dependentKeys => {
-                // @ts-expect-error dependentKeys should always be defined because contributor and dependent expressions are always set together
-                return dependentKeys.delete(expr)
+        contributorExprs?.forEach(contributorExpr => {
+            this.exprToDependentExprs = this.exprToDependentExprs.update(contributorExpr, dependentExprs => {
+                // @ts-expect-error dependentExprs should always be defined because contributor and dependent expressions are always set together
+                return dependentExprs.delete(expr)
             })
         })
     }
