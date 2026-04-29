@@ -181,10 +181,16 @@ export class Database {
         }
 
         // After checking derivative IDs, return the cached result if it exists
-        // TODO: Add proper handling for cases when the cached result is an error
         const cachedAfterDerivativeIdCheck = this.exprToCachedResult.get(expr)
         if(cachedAfterDerivativeIdCheck) {
-            return cachedAfterDerivativeIdCheck.value
+            const { value, isReturnValue } = cachedAfterDerivativeIdCheck
+
+            // Return the return value or throw the error, depending on which it is
+            if(isReturnValue) {
+                return value
+            } else {
+                throw value
+            }
         }
 
         // If there is still no cached result, compute and cache one using the predicate function

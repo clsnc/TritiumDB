@@ -1017,4 +1017,25 @@ describe('ReactiveDatabase', () => {
     expect(db.getResult(expr(outerFunc))).toBe('outer-inner-good')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
+
+  it('throws when derivative expression is cached as error during creating expression computation', () => {
+    const derivError = new Error('derivative error')
+    const derivPred = (_db: Database, _id: DerivativeId): any => { throw derivError }
+
+    const createFunc = (db: Database) => {
+      const id = db.getDerivativeId('key')
+      try {
+        db.spyResult(expr(derivPred, id))
+      } catch (_) {
+        // swallow so createFunc succeeds
+      }
+      return id
+    }
+
+    const creatingExpr = expr(createFunc)
+    const id = new DerivativeId(creatingExpr, 'key')
+    const derivExpr = expr(derivPred, id)
+
+    expect(() => new Database().getResult(derivExpr)).toThrow(derivError)
+  })
 })
