@@ -106,7 +106,10 @@ export class Database {
 
         // Remove this expression from each contributor's dependency tracking
         contributorKeys?.forEach(contributorKey => {
-            this.exprToDependentExprs = this.exprToDependentExprs.update(contributorKey, dependentKeys => dependentKeys.delete(expr))
+            this.exprToDependentExprs = this.exprToDependentExprs.update(contributorKey, dependentKeys => {
+                // @ts-expect-error dependentKeys should always be defined because contributor and dependent expressions are always set together
+                return dependentKeys.delete(expr)
+            })
         })
     }
 
@@ -123,7 +126,8 @@ export class Database {
         let discoveredExprs = ImmSet<Expression>([expr, ...blockedExprs])
         const exprVisitQueue: Expression[] = [expr]
         while (exprVisitQueue.length > 0) {
-            const currentExpr = exprVisitQueue.pop()
+            // @ts-expect-error Popping from the queue is guaranteed to return an Expression due to the length check above
+            const currentExpr: Expression = exprVisitQueue.pop()
             const currentDependentExprs = this.exprToDependentExprs.get(currentExpr) || ImmSet<Expression>()
             currentDependentExprs.forEach(dependentExpr => {
                 if (!discoveredExprs.has(dependentExpr)) {
