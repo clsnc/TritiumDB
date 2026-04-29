@@ -68,12 +68,14 @@ export class Reactor {
         // Return a function to unsubscribe
         return () => {
             const exprCallbacks = this.subscribers.get(expr);
-            if (exprCallbacks.size === 1) {
-                // If this was the only subscription, then this expression's entry should just be deleted
-                this.subscribers = this.subscribers.delete(expr);
-            } else {
-                // Otherwise, just remove this callback
-                exprCallbacks.delete(callback)
+            if(exprCallbacks) { // This check is necessary in case all callbacks have already been unsubscribed
+                if (exprCallbacks.size === 1) {
+                    // If this was the only subscription, then this expression's entry should just be deleted
+                    this.subscribers = this.subscribers.delete(expr);
+                } else {
+                    // Otherwise, just remove this callback
+                    exprCallbacks.delete(callback)
+                }
             }
         };
     }
@@ -92,7 +94,7 @@ export class Reactor {
                     // Awaiting prevents the loop from repeatedly ensuring the same dependency
                     try {
                         const incompleteExpr = (err as AsyncCallIncompleteError).incompleteExpr
-                        
+
                         /* AsyncCallIncompleteError is only thrown by spyAsyncEffectResult, which only operates on async function expressions,
                            so the return type is guaranteed to be a Promise. */
                         await this.ensureAsyncRun(incompleteExpr.pred as (...args: any[]) => Promise<any>, ...incompleteExpr.args)
