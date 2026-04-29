@@ -1,4 +1,4 @@
-import { List as ImmList, Map as ImmMap, Set as ImmSet, Record, ValueObject } from "immutable"
+import { List as ImmList, Map as ImmMap, Set as ImmSet, is, ValueObject } from "immutable"
 import { AsyncCallIncompleteError, asyncCallResult, AsyncCallStatus, asyncCallStatus } from "./async"
 
 export type Value = any
@@ -31,15 +31,22 @@ export function expr<P extends (db: Database, ...args: any[]) => any>(
     return new Expression(pred, args as any)
 }
 
-export class DerivativeId extends Record({
-    creatingExpr: null,
-    uniqueKey: null
-}) {
-    constructor(creatingExpr: Expression, uniqueKey: any) {
-        super({ creatingExpr, uniqueKey })
+export class DerivativeId implements ValueObject {
+    constructor(
+        readonly creatingExpr: Expression,
+        readonly uniqueKey: any
+    ) {}
+
+    hashCode(): number {
+        return ImmList([this.creatingExpr, this.uniqueKey]).hashCode()
+    }
+
+    equals(other: unknown): boolean {
+        return other instanceof DerivativeId
+            && this.creatingExpr.equals(other.creatingExpr)
+            && is(this.uniqueKey, other.uniqueKey)
     }
 }
-
 
 export class RecursiveExpressionComputationError extends Error {
     public readonly name: string
