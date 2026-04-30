@@ -22,6 +22,17 @@ export class Expression<P extends (db: Database, ...args: any[]) => any = (db: D
         return other instanceof Expression && this._list.equals((other as Expression)._list)
     }
 
+    toJSON(): object {
+        return {
+            pred: this.pred.name || 'anonymous',
+            args: this.args
+        }
+    }
+
+    toString(): string {
+        return JSON.stringify(this)
+    }
+
     [Symbol.iterator](): Iterator<any> { return this._list[Symbol.iterator]() }
 }
 
@@ -45,6 +56,10 @@ export class DerivativeId implements ValueObject {
         return other instanceof DerivativeId
             && this.creatingExpr.equals(other.creatingExpr)
             && is(this.uniqueKey, other.uniqueKey)
+    }
+
+    toString(): string {
+        return JSON.stringify(this)
     }
 }
 

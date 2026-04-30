@@ -18,6 +18,17 @@ describe('ReactiveDatabase', () => {
     expect(func).toHaveBeenCalledWith(rdb, 'test-arg')
   })
 
+  it('Expression toString produces correct JSON with named and anonymous predicates', () => {
+    function namedPred(_db: Database, x: number, y: string) { return undefined }
+
+    expect(expr(namedPred, 1, 'hello').toString()).toBe(
+      JSON.stringify({ pred: 'namedPred', args: [1, 'hello'] })
+    )
+    expect(expr((_db: Database) => undefined).toString()).toBe(
+      JSON.stringify({ pred: 'anonymous', args: [] })
+    )
+  })
+
   it('throws RecursiveExpressionComputationError for recursive computation of the same expression', () => {
     const rdb = new Database()
     let recursiveCallCount = 0
@@ -302,6 +313,48 @@ describe('ReactiveDatabase', () => {
     // The derivative expression should be accessible
     const derivativeExpr = expr(derivPred, createdDerivativeId)
     expect(rdb.getResult(derivativeExpr)).toBe('derivative-value')
+  })
+
+  it('toJSON and toString produce correct, unique, descriptive output for DerivativeIds', () => {
+    const rdb = new Database()
+
+    function myCreatingFunc(db: Database) {
+      const id1 = db.getDerivativeId('key-a')
+      const id2 = db.getDerivativeId('key-b')
+      return [id1, id2]
+    }
+    function otherCreatingFunc(db: Database) {
+      return db.getDerivativeId('key-a')
+    }
+
+    const [id1, id2] = rdb.getResult(expr(myCreatingFunc))
+    const id3 = rdb.getResult(expr(otherCreatingFunc))
+
+    // toString produces correct JSON shape
+    expect(id1.toString()).toBe(JSON.stringify({
+      creatingExpr: { pred: 'myCreatingFunc', args: [] },
+      uniqueKey: 'key-a'
+    }))
+    expect(id3.toString()).toBe(JSON.stringify({
+      creatingExpr: { pred: 'otherCreatingFunc', args: [] },
+      uniqueKey: 'key-a'
+    }))
+
+    // Different uniqueKey within same creating expr → different string
+    expect(id1.toString()).not.toBe(id2.toString())
+
+    // Same uniqueKey but different creating expr → different string
+    expect(id1.toString()).not.toBe(id3.toString())
+
+    // Anonymous function predicate falls back to 'anonymous'
+    const id4 = rdb.getResult(expr((db: Database) => db.getDerivativeId('key-c')))
+    expect(id4.toString()).toBe(JSON.stringify({
+      creatingExpr: { pred: 'anonymous', args: [] },
+      uniqueKey: 'key-c'
+    }))
+
+    // Not the default Object toString
+    expect(id1.toString()).not.toBe('[object Object]')
   })
 
   it('returns consistent DerivativeId for same uniqueKey in same function with same args', () => {
