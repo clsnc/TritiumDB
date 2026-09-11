@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Database, expr } from './database'
-import { ReactiveEntity, property, method } from './entities'
+import { ReactiveEntity, property, method, callMethod } from './entities'
 
 describe('ReactiveEntity', () => {
     it('implements ValueObject with structural equality', () => {
@@ -278,6 +278,127 @@ describe('method', () => {
 
             // @ts-expect-error string is not assignable to number
             const badResult: number = db.getResult(expr(greetFn, entity, 'Alice'))
+        }
+    })
+})
+
+describe('callMethod', () => {
+    it('calls a method with args in a single expression', () => {
+        const db = new Database()
+        const createFunc = (db: Database) => {
+            return db.createEntity({
+                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+            })
+        }
+        const e = expr(createFunc)
+        const entity = db.getResult(e)
+
+        const result = db.getResult(expr(callMethod, entity, 'greet', 'Alice'))
+        expect(result).toBe('Hello Alice')
+    })
+
+    it('works with no user args', () => {
+        const db = new Database()
+        const createFunc = (db: Database) => {
+            return db.createEntity({
+                greeting: (db: Database, entity: ReactiveEntity<any>) => 'Hi there'
+            })
+        }
+        const e = expr(createFunc)
+        const entity = db.getResult(e)
+
+        const result = db.getResult(expr(callMethod, entity, 'greeting'))
+        expect(result).toBe('Hi there')
+    })
+
+    it('method can use db to spy on expressions', () => {
+        const db = new Database()
+        const base = (_db: Database): any => undefined
+        const baseExpr = expr(base)
+        let currentDb = db.with(baseExpr, 'greeting')
+
+        const createFunc = (db: Database) => {
+            const greeting = db.spyResult(baseExpr)
+            return db.createEntity({
+                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `${greeting} ${name}`
+            })
+        }
+        const e = expr(createFunc)
+        const entity = currentDb.getResult(e)
+
+        const consumerFunc = (db: Database) => {
+            const currentEntity = db.spyResult(e)
+            return db.getResult(expr(callMethod, currentEntity, 'greet', 'Bob'))
+        }
+        const consumerExpr = expr(consumerFunc)
+
+        expect(currentDb.getResult(consumerExpr)).toBe('greeting Bob')
+
+        currentDb = currentDb.with(baseExpr, 'Hi')
+        expect(currentDb.getResult(consumerExpr)).toBe('Hi Bob')
+    })
+
+    it('method can use entity to access properties', () => {
+        const db = new Database()
+        const createFunc = (db: Database) => {
+            return db.createEntity({
+                name: 'Alice',
+                greeting: (db: Database, entity: ReactiveEntity<any>) => {
+                    const name = db.getResult(expr(property, entity, 'name'))
+                    return `Hi, I'm ${name}`
+                }
+            })
+        }
+        const e = expr(createFunc)
+        const entity = db.getResult(e)
+
+        const result = db.getResult(expr(callMethod, entity, 'greeting'))
+        expect(result).toBe("Hi, I'm Alice")
+    })
+
+    it('type error on invalid method name', () => {
+        () => {
+            const db = new Database()
+            const createFunc = (db: Database) => {
+                return db.createEntity({ name: 'Alice' })
+            }
+            const e = expr(createFunc)
+            const entity = db.getResult(e)
+
+            // @ts-expect-error 'name' is a string, not a method
+            db.getResult(expr(callMethod, entity, 'name'))
+        }
+    })
+
+    it('type error on wrong arg type', () => {
+        () => {
+            const db = new Database()
+            const createFunc = (db: Database) => {
+                return db.createEntity({
+                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                })
+            }
+            const e = expr(createFunc)
+            const entity = db.getResult(e)
+
+            // @ts-expect-error number is not assignable to string
+            db.getResult(expr(callMethod, entity, 'greet', 42))
+        }
+    })
+
+    it('type error on wrong return type usage', () => {
+        () => {
+            const db = new Database()
+            const createFunc = (db: Database) => {
+                return db.createEntity({
+                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                })
+            }
+            const e = expr(createFunc)
+            const entity = db.getResult(e)
+
+            // @ts-expect-error string is not assignable to number
+            const badResult: number = db.getResult(expr(callMethod, entity, 'greet', 'Alice'))
         }
     })
 })
