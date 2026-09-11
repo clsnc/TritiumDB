@@ -1,5 +1,5 @@
 export { asyncCallResult, asyncCallStatus, AsyncCallStatus, resultIsReady } from './async'
 export { Database, DerivativeId, Expression, expr } from './database'
-export { property } from './entities'
+export { property, method } from './entities'
 export { Reactor } from './reactor'
 export { useResult } from './reactor_hooks'
