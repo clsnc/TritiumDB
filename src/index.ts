@@ -1,4 +1,3 @@
-export { asyncCallResult, asyncCallStatus, AsyncCallStatus, resultIsReady } from './async'
 export { Database, DerivativeId, Expression, expr } from './database'
 export { property, method, callMethod } from './entities'
 export { Reactor } from './reactor'

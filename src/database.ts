@@ -1,5 +1,4 @@
 import { List as ImmList, Map as ImmMap, Set as ImmSet, is, ValueObject } from "immutable"
-import { AsyncCallIncompleteError, asyncCallResult, AsyncCallStatus, asyncCallStatus } from "./async"
 import { ReactiveEntity, ReactiveEntityData, property } from "./entities"
 
 export type Value = any
@@ -255,19 +254,6 @@ export class Database {
         this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
 
         return affectedExprs
-    }
-
-    spyAsyncEffectResult<A extends any[], R extends Promise<any>>(expr: Expression<A, R>): Awaited<R>
-    spyAsyncEffectResult(expr: Expression): any
-    spyAsyncEffectResult(expr: Expression): any {
-        const callStatus = this.spyResult(new Expression(asyncCallStatus, [expr.pred, ...expr.args]))
-        if(callStatus === AsyncCallStatus.Complete) {
-            // If the async call is complete, return its return value
-            return this.spyResult(new Expression(asyncCallResult, [expr.pred, ...expr.args]))
-        } else {
-            // If the async call is incomplete, throw an error
-            throw new AsyncCallIncompleteError(expr)
-        }
     }
 
     spyResult<A extends any[], R>(expr: Expression<A, R>): R
