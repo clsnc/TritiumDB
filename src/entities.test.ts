@@ -328,7 +328,7 @@ describe('callMethod', () => {
 
         const consumerFunc = (db: Database) => {
             const currentEntity = db.spyResult(e)
-            return db.getResult(expr(callMethod, currentEntity, 'greet', 'Bob'))
+            return db.spyResult(expr(callMethod, currentEntity, 'greet', 'Bob'))
         }
         const consumerExpr = expr(consumerFunc)
 
