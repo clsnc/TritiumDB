@@ -1,4 +1,4 @@
 export { Database, DerivativeId, Expression, expr } from './database'
-export { property, method, callMethod } from './entities'
+export { property, method, callMethod, createEntity } from './entities'
 export { Reactor } from './reactor'
 export { useResult } from './reactor_hooks'

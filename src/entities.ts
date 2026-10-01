@@ -13,6 +13,10 @@ export class ReactiveEntity<T extends ReactiveEntityData> implements ValueObject
     }
 }
 
+export const createEntity = <T extends ReactiveEntityData>(db: Database, entries: T): ReactiveEntity<T> => {
+    return db.createEntity(entries)
+}
+
 export const property = <T extends ReactiveEntityData, K extends keyof T>(
     _db: Database, _entity: ReactiveEntity<T>, key: K
 ): T[K] => {

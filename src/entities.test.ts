@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Database, expr } from './database'
-import { ReactiveEntity, property, method, callMethod } from './entities'
+import { ReactiveEntity, property, method, callMethod, createEntity } from './entities'
+import { Reactor } from './reactor'
 
 describe('ReactiveEntity', () => {
     it('implements ValueObject with structural equality', () => {
@@ -125,6 +126,55 @@ describe('createEntity', () => {
         expect(entity).toBeInstanceOf(ReactiveEntity)
         // @ts-expect-error There should be no 'anything' key
         expect(() => db.getResult(expr(property, entity, 'anything'))).toThrow()
+    })
+})
+
+describe('createEntity predicate', () => {
+    it('creates an entity via getResult with readable properties', () => {
+        const db = new Database()
+        const entity = db.getResult(expr(createEntity, { name: 'Alice', age: 30 }))
+
+        expect(entity).toBeInstanceOf(ReactiveEntity)
+        expect(db.getResult(expr(property, entity, 'name'))).toBe('Alice')
+        expect(db.getResult(expr(property, entity, 'age'))).toBe(30)
+    })
+
+    it('is usable via Reactor.getResult without internal computation', () => {
+        const reactor = new Reactor()
+        const entity = reactor.getResult(expr(createEntity, { name: 'Alice' }))
+
+        expect(entity).toBeInstanceOf(ReactiveEntity)
+        expect(reactor.getResult(expr(property, entity, 'name'))).toBe('Alice')
+    })
+
+    it('returns the cached entity for the same expression', () => {
+        const db = new Database()
+        const e = expr(createEntity, { name: 'Alice' })
+
+        const first = db.getResult(e)
+        const second = db.getResult(e)
+
+        expect(second).toBe(first)
+    })
+
+    it('creates distinct entities for distinct expressions', () => {
+        const db = new Database()
+        const first = db.getResult(expr(createEntity, { name: 'Alice' }))
+        const second = db.getResult(expr(createEntity, { name: 'Alice' }))
+
+        expect(first).toBeInstanceOf(ReactiveEntity)
+        expect(second).toBeInstanceOf(ReactiveEntity)
+        expect(second.id).not.toBe(first.id)
+        expect(db.getResult(expr(property, second, 'name'))).toBe('Alice')
+    })
+
+    it('supports methods via callMethod', () => {
+        const db = new Database()
+        const entity = db.getResult(expr(createEntity, {
+            greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+        }))
+
+        expect(db.getResult(expr(callMethod, entity, 'greet', 'Alice'))).toBe('Hello Alice')
     })
 })
 
