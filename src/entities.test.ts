@@ -3,6 +3,19 @@ import { Database, expr } from './database'
 import { ReactiveEntity, property, method, callMethod, createEntity } from './entities'
 import { Reactor } from './reactor'
 
+type Greeter = {
+    greet: (db: Database, entity: ReactiveEntity<Greeter>, name: string) => string
+}
+
+type NoArgGreeter = {
+    greeting: (db: Database, entity: ReactiveEntity<NoArgGreeter>) => string
+}
+
+type NamedGreeter = {
+    name: string
+    greeting: (db: Database, entity: ReactiveEntity<NamedGreeter>) => string
+}
+
 describe('ReactiveEntity', () => {
     it('implements ValueObject with structural equality', () => {
         const a = new ReactiveEntity(1)
@@ -170,8 +183,8 @@ describe('createEntity predicate', () => {
 
     it('supports methods via callMethod', () => {
         const db = new Database()
-        const entity = db.getResult(expr(createEntity, {
-            greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+        const entity = db.getResult(expr(createEntity<Greeter>, {
+            greet: (db, entity, name: string) => `Hello ${name}`
         }))
 
         expect(db.getResult(expr(callMethod, entity, 'greet', 'Alice'))).toBe('Hello Alice')
@@ -182,8 +195,8 @@ describe('method', () => {
     it('returns the function stored as an entity property', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({
-                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+            return db.createEntity<Greeter>({
+                greet: (db, entity, name: string) => `Hello ${name}`
             })
         }
         const e = expr(createFunc)
@@ -196,8 +209,8 @@ describe('method', () => {
     it('returned function works correctly in an expression', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({
-                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+            return db.createEntity<Greeter>({
+                greet: (db, entity, name: string) => `Hello ${name}`
             })
         }
         const e = expr(createFunc)
@@ -217,8 +230,8 @@ describe('method', () => {
 
         const createFunc = (db: Database) => {
             const greeting = db.spyResult(baseExpr)
-            return db.createEntity({
-                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `${greeting} ${name}`
+            return db.createEntity<Greeter>({
+                greet: (db, entity, name: string) => `${greeting} ${name}`
             })
         }
         const e = expr(createFunc)
@@ -240,9 +253,9 @@ describe('method', () => {
     it('returned function can use entity to reference the entity', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({
+            return db.createEntity<NamedGreeter>({
                 name: 'Alice',
-                greeting: (db: Database, entity: ReactiveEntity<any>) => {
+                greeting: (db, entity) => {
                     const name = db.getResult(expr(property, entity, 'name'))
                     return `Hi, I'm ${name}`
                 }
@@ -277,8 +290,8 @@ describe('method', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({
-                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                return db.createEntity<Greeter>({
+                    greet: (db, entity, name: string) => `Hello ${name}`
                 })
             }
             const e = expr(createFunc)
@@ -298,8 +311,8 @@ describe('method', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({
-                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                return db.createEntity<Greeter>({
+                    greet: (db, entity, name: string) => `Hello ${name}`
                 })
             }
             const e = expr(createFunc)
@@ -316,8 +329,8 @@ describe('method', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({
-                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                return db.createEntity<Greeter>({
+                    greet: (db, entity, name: string) => `Hello ${name}`
                 })
             }
             const e = expr(createFunc)
@@ -336,8 +349,8 @@ describe('callMethod', () => {
     it('calls a method with args in a single expression', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({
-                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+            return db.createEntity<Greeter>({
+                greet: (db, entity, name: string) => `Hello ${name}`
             })
         }
         const e = expr(createFunc)
@@ -350,8 +363,8 @@ describe('callMethod', () => {
     it('works with no user args', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({
-                greeting: (db: Database, entity: ReactiveEntity<any>) => 'Hi there'
+            return db.createEntity<NoArgGreeter>({
+                greeting: (db, entity) => 'Hi there'
             })
         }
         const e = expr(createFunc)
@@ -369,8 +382,8 @@ describe('callMethod', () => {
 
         const createFunc = (db: Database) => {
             const greeting = db.spyResult(baseExpr)
-            return db.createEntity({
-                greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `${greeting} ${name}`
+            return db.createEntity<Greeter>({
+                greet: (db, entity, name: string) => `${greeting} ${name}`
             })
         }
         const e = expr(createFunc)
@@ -391,9 +404,9 @@ describe('callMethod', () => {
     it('method can use entity to access properties', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({
+            return db.createEntity<NamedGreeter>({
                 name: 'Alice',
-                greeting: (db: Database, entity: ReactiveEntity<any>) => {
+                greeting: (db, entity) => {
                     const name = db.getResult(expr(property, entity, 'name'))
                     return `Hi, I'm ${name}`
                 }
@@ -424,8 +437,8 @@ describe('callMethod', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({
-                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                return db.createEntity<Greeter>({
+                    greet: (db, entity, name: string) => `Hello ${name}`
                 })
             }
             const e = expr(createFunc)
@@ -440,8 +453,8 @@ describe('callMethod', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({
-                    greet: (db: Database, entity: ReactiveEntity<any>, name: string) => `Hello ${name}`
+                return db.createEntity<Greeter>({
+                    greet: (db, entity, name: string) => `Hello ${name}`
                 })
             }
             const e = expr(createFunc)
