@@ -6,9 +6,9 @@
   "scripts": {
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
-    "build": "tsc",
+    "build": "node ./node_modules/typescript/bin/tsc",
     "prepare": "npm run build",
-    "test": "vitest",
+    "test": "node ./node_modules/vitest/vitest.mjs",
     "prepublishOnly": "npm run build"
   },
   "license": "MIT",
