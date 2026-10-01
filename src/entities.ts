@@ -4,6 +4,12 @@ import { Database, expr } from "./database"
 export type ReactiveEntityData = Record<any, any>;
 
 export class ReactiveEntity<T extends ReactiveEntityData> implements ValueObject {
+    // This field doesn't exist at runtime. ReactiveEntity properties are stored in Database instances, 
+    // not on the object itself, so without this field, TypeScript would treat all ReactiveEntity objects 
+    // as structurally identical and be overly permissive. This field adds some compile-time-only structure 
+    // so TypeScript can constrain things properly.
+    private declare readonly __entityData: T
+
     constructor(readonly id: number) {}
 
     hashCode(): number { return this.id }

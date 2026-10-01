@@ -451,4 +451,21 @@ describe('callMethod', () => {
             const badResult: number = db.getResult(expr(callMethod, entity, 'greet', 'Alice'))
         }
     })
+
+    it('type error when method is called on an entity of the wrong type', () => {
+        () => {
+            const db = new Database()
+            const entity = db.getResult(expr(createEntity, {
+                greet: (db: Database, ent: typeof entity2, name: string) =>
+                    db.spyResult(expr(property, ent, 'name'))
+            }))
+            const entity2 = db.getResult(expr(createEntity, { name: 'Bob' }))
+
+            // greet expects entity2's type, but is invoked with entity
+            // @ts-expect-error
+            db.getResult(expr(method, entity, "greet"))
+            // @ts-expect-error
+            db.getResult(expr(callMethod, entity, 'greet', 'Bob'))
+        }
+    })
 })
