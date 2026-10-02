@@ -1,5 +1,5 @@
 import { List as ImmList, Map as ImmMap, Set as ImmSet, is, ValueObject } from "immutable"
-import { ReactiveEntity, ReactiveEntityData, property } from "./entities"
+import { ReactiveEntity, ReactiveEntityData, StableEntityId, property } from "./entities"
 
 export type Value = any
 
@@ -73,8 +73,6 @@ export class RecursiveExpressionComputationError extends Error {
 class ExpressionResult {
     constructor(readonly value: Value | Error, readonly isReturnValue: boolean) {}
 }
-
-let nextEntityId: number = 0
 
 export class Database {
     protected currentlyComputingExprs: ImmSet<Expression>
@@ -359,8 +357,8 @@ export class Database {
         return this.withGetAffectedRels(expr, newResult)
     }
 
-    createEntity<T extends ReactiveEntityData>(entries: T): ReactiveEntity<T> {
-        const entity = new ReactiveEntity<T>(nextEntityId++)
+    createEntity<T extends ReactiveEntityData>(entries: T, id: StableEntityId): ReactiveEntity<T> {
+        const entity = new ReactiveEntity<T>(id)
         for (const [key, value] of Object.entries(entries)) {
             this.setEntityProperty(entity, key, value)
         }

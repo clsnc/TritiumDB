@@ -42,7 +42,7 @@ describe('createEntity', () => {
     it('creates an entity and stores properties as derivative expressions', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({ name: 'Alice', age: 30 })
+            return db.createEntity({ name: 'Alice', age: 30 }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -52,17 +52,18 @@ describe('createEntity', () => {
         expect(db.getResult(expr(property, entity, 'age'))).toBe(30)
     })
 
-    it('returns entities with sequential ids', () => {
+    it('returns entities with the given stable ids', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            const e1 = db.createEntity({ x: 1 })
-            const e2 = db.createEntity({ x: 2 })
+            const e1 = db.createEntity({ x: 1 }, 1)
+            const e2 = db.createEntity({ x: 2 }, 2)
             return [e1, e2]
         }
         const e = expr(createFunc)
         const [entity1, entity2] = db.getResult(e)
 
-        expect(entity1.id).not.toBe(entity2.id)
+        expect(entity1.id).toBe(1)
+        expect(entity2.id).toBe(2)
     })
 
     it('properties are invalidated when the creating expression recomputes', () => {
@@ -73,7 +74,7 @@ describe('createEntity', () => {
 
         const createFunc = (db: Database) => {
             const label = db.spyResult(baseExpr)
-            return db.createEntity({ label })
+            return db.createEntity({ label }, 1)
         }
         const e = expr(createFunc)
         const entity = currentDb.getResult(e)
@@ -90,8 +91,8 @@ describe('createEntity', () => {
     it('supports multiple entities with independent properties', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            const alice = db.createEntity({ name: 'Alice' })
-            const bob = db.createEntity({ name: 'Bob' })
+            const alice = db.createEntity({ name: 'Alice' }, 1)
+            const bob = db.createEntity({ name: 'Bob' }, 2)
             return { alice, bob }
         }
         const e = expr(createFunc)
@@ -110,7 +111,7 @@ describe('createEntity', () => {
 
         const createFunc = (db: Database) => {
             const val = db.spyResult(baseExpr)
-            return db.createEntity({ msg: val })
+            return db.createEntity({ msg: val }, 1)
         }
         const e = expr(createFunc)
         const entity = currentDb.getResult(e)
@@ -131,7 +132,7 @@ describe('createEntity', () => {
     it('entity with empty entries creates an entity with no properties', () => {
         const db = new Database()
         const createFunc = (db: Database) => {
-            return db.createEntity({})
+            return db.createEntity({}, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -145,7 +146,7 @@ describe('createEntity', () => {
 describe('createEntity predicate', () => {
     it('creates an entity via getResult with readable properties', () => {
         const db = new Database()
-        const entity = db.getResult(expr(createEntity, { name: 'Alice', age: 30 }))
+        const entity = db.getResult(expr(createEntity, { name: 'Alice', age: 30 }, 1))
 
         expect(entity).toBeInstanceOf(ReactiveEntity)
         expect(db.getResult(expr(property, entity, 'name'))).toBe('Alice')
@@ -154,7 +155,7 @@ describe('createEntity predicate', () => {
 
     it('is usable via Reactor.getResult without internal computation', () => {
         const reactor = new Reactor()
-        const entity = reactor.getResult(expr(createEntity, { name: 'Alice' }))
+        const entity = reactor.getResult(expr(createEntity, { name: 'Alice' }, 1))
 
         expect(entity).toBeInstanceOf(ReactiveEntity)
         expect(reactor.getResult(expr(property, entity, 'name'))).toBe('Alice')
@@ -162,7 +163,7 @@ describe('createEntity predicate', () => {
 
     it('returns the cached entity for the same expression', () => {
         const db = new Database()
-        const e = expr(createEntity, { name: 'Alice' })
+        const e = expr(createEntity, { name: 'Alice' }, 1)
 
         const first = db.getResult(e)
         const second = db.getResult(e)
@@ -170,22 +171,11 @@ describe('createEntity predicate', () => {
         expect(second).toBe(first)
     })
 
-    it('creates distinct entities for distinct expressions', () => {
-        const db = new Database()
-        const first = db.getResult(expr(createEntity, { name: 'Alice' }))
-        const second = db.getResult(expr(createEntity, { name: 'Alice' }))
-
-        expect(first).toBeInstanceOf(ReactiveEntity)
-        expect(second).toBeInstanceOf(ReactiveEntity)
-        expect(second.id).not.toBe(first.id)
-        expect(db.getResult(expr(property, second, 'name'))).toBe('Alice')
-    })
-
     it('supports methods via callMethod', () => {
         const db = new Database()
         const entity = db.getResult(expr(createEntity<Greeter>, {
             greet: (db, entity, name: string) => `Hello ${name}`
-        }))
+        }, 1))
 
         expect(db.getResult(expr(callMethod, entity, 'greet', 'Alice'))).toBe('Hello Alice')
     })
@@ -197,7 +187,7 @@ describe('method', () => {
         const createFunc = (db: Database) => {
             return db.createEntity<Greeter>({
                 greet: (db, entity, name: string) => `Hello ${name}`
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -211,7 +201,7 @@ describe('method', () => {
         const createFunc = (db: Database) => {
             return db.createEntity<Greeter>({
                 greet: (db, entity, name: string) => `Hello ${name}`
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -232,7 +222,7 @@ describe('method', () => {
             const greeting = db.spyResult(baseExpr)
             return db.createEntity<Greeter>({
                 greet: (db, entity, name: string) => `${greeting} ${name}`
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = currentDb.getResult(e)
@@ -259,7 +249,7 @@ describe('method', () => {
                     const name = db.getResult(expr(property, entity, 'name'))
                     return `Hi, I'm ${name}`
                 }
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -276,7 +266,7 @@ describe('method', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({ name: 'Alice' })
+                return db.createEntity({ name: 'Alice' }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -292,7 +282,7 @@ describe('method', () => {
             const createFunc = (db: Database) => {
                 return db.createEntity<Greeter>({
                     greet: (db, entity, name: string) => `Hello ${name}`
-                })
+                }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -313,7 +303,7 @@ describe('method', () => {
             const createFunc = (db: Database) => {
                 return db.createEntity<Greeter>({
                     greet: (db, entity, name: string) => `Hello ${name}`
-                })
+                }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -331,7 +321,7 @@ describe('method', () => {
             const createFunc = (db: Database) => {
                 return db.createEntity<Greeter>({
                     greet: (db, entity, name: string) => `Hello ${name}`
-                })
+                }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -351,7 +341,7 @@ describe('callMethod', () => {
         const createFunc = (db: Database) => {
             return db.createEntity<Greeter>({
                 greet: (db, entity, name: string) => `Hello ${name}`
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -365,7 +355,7 @@ describe('callMethod', () => {
         const createFunc = (db: Database) => {
             return db.createEntity<NoArgGreeter>({
                 greeting: (db, entity) => 'Hi there'
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -384,7 +374,7 @@ describe('callMethod', () => {
             const greeting = db.spyResult(baseExpr)
             return db.createEntity<Greeter>({
                 greet: (db, entity, name: string) => `${greeting} ${name}`
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = currentDb.getResult(e)
@@ -410,7 +400,7 @@ describe('callMethod', () => {
                     const name = db.getResult(expr(property, entity, 'name'))
                     return `Hi, I'm ${name}`
                 }
-            })
+            }, 1)
         }
         const e = expr(createFunc)
         const entity = db.getResult(e)
@@ -423,7 +413,7 @@ describe('callMethod', () => {
         () => {
             const db = new Database()
             const createFunc = (db: Database) => {
-                return db.createEntity({ name: 'Alice' })
+                return db.createEntity({ name: 'Alice' }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -439,7 +429,7 @@ describe('callMethod', () => {
             const createFunc = (db: Database) => {
                 return db.createEntity<Greeter>({
                     greet: (db, entity, name: string) => `Hello ${name}`
-                })
+                }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -455,7 +445,7 @@ describe('callMethod', () => {
             const createFunc = (db: Database) => {
                 return db.createEntity<Greeter>({
                     greet: (db, entity, name: string) => `Hello ${name}`
-                })
+                }, 1)
             }
             const e = expr(createFunc)
             const entity = db.getResult(e)
@@ -471,8 +461,8 @@ describe('callMethod', () => {
             const entity = db.getResult(expr(createEntity, {
                 greet: (db: Database, ent: typeof entity2, name: string) =>
                     db.spyResult(expr(property, ent, 'name'))
-            }))
-            const entity2 = db.getResult(expr(createEntity, { name: 'Bob' }))
+            }, 1))
+            const entity2 = db.getResult(expr(createEntity, { name: 'Bob' }, 2))
 
             // greet expects entity2's type, but is invoked with entity
             // @ts-expect-error

@@ -3,6 +3,8 @@ import { Database, expr } from "./database"
 
 export type ReactiveEntityData = Record<any, any>;
 
+export type StableEntityId = number;
+
 export class ReactiveEntity<T extends ReactiveEntityData> implements ValueObject {
     // This field doesn't exist at runtime. ReactiveEntity properties are stored in Database instances, 
     // not on the object itself, so without this field, TypeScript would treat all ReactiveEntity objects 
@@ -10,7 +12,7 @@ export class ReactiveEntity<T extends ReactiveEntityData> implements ValueObject
     // so TypeScript can constrain things properly.
     private declare readonly __entityData: T
 
-    constructor(readonly id: number) {}
+    constructor(readonly id: StableEntityId) {}
 
     hashCode(): number { return this.id }
 
@@ -19,8 +21,8 @@ export class ReactiveEntity<T extends ReactiveEntityData> implements ValueObject
     }
 }
 
-export const createEntity = <T extends ReactiveEntityData>(db: Database, entries: T): ReactiveEntity<T> => {
-    return db.createEntity(entries)
+export const createEntity = <T extends ReactiveEntityData>(db: Database, entries: T, id: StableEntityId): ReactiveEntity<T> => {
+    return db.createEntity(entries, id)
 }
 
 export const property = <T extends ReactiveEntityData, K extends keyof T>(
