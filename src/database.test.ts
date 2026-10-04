@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, RecursiveExpressionComputationError, expr } from './database'
+import { Database, RecursiveExpressionComputationError, expr, spy } from './database'
 
 describe('ReactiveDatabase', () => {
   it('creates a ReactiveDatabase instance', () => {
@@ -10,21 +10,21 @@ describe('ReactiveDatabase', () => {
 
   it('computes result for function predicates', () => {
     const rdb = new Database()
-    const func = vi.fn((db, arg) => `computed-${arg}`)
+    const func = vi.fn((arg) => `computed-${arg}`)
     const e = expr(func, 'test-arg')
 
     const result = rdb.getResult(e)
     expect(result).toBe('computed-test-arg')
-    expect(func).toHaveBeenCalledWith(rdb, 'test-arg')
+    expect(func).toHaveBeenCalledWith('test-arg')
   })
 
   it('Expression toString produces correct JSON with named and anonymous predicates', () => {
-    function namedPred(_db: Database, x: number, y: string) { return undefined }
+    function namedPred(x: number, y: string) { return undefined }
 
     expect(expr(namedPred, 1, 'hello').toString()).toBe(
       JSON.stringify({ pred: 'namedPred', args: [1, 'hello'] })
     )
-    expect(expr((_db: Database) => undefined).toString()).toBe(
+    expect(expr(() => undefined).toString()).toBe(
       JSON.stringify({ pred: 'anonymous', args: [] })
     )
   })
@@ -33,11 +33,11 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
     let recursiveCallCount = 0
 
-    const recursiveFunc = (db: Database, arg: string): string => {
+    const recursiveFunc = (arg: string): string => {
       recursiveCallCount++
       if (recursiveCallCount === 1) {
         // First call, trigger recursion
-        return db.spyResult(expr(recursiveFunc, arg))
+        return spy(expr(recursiveFunc, arg))
       }
       return 'result'
     }
@@ -58,7 +58,7 @@ describe('ReactiveDatabase', () => {
 
   it('creates immutable database with with() method', () => {
     const rdb = new Database()
-    const testPred = (_db: Database, _arg: string): any => undefined
+    const testPred = (_arg: string): any => undefined
     const e = expr(testPred, 'arg')
     const result = 'test-result'
 
@@ -72,7 +72,7 @@ describe('ReactiveDatabase', () => {
 
   it('returns affected expressions with withGetAffectedRels()', () => {
     const rdb = new Database()
-    const testPred = (_db: Database, _arg: string): any => undefined
+    const testPred = (_arg: string): any => undefined
     const e = expr(testPred, 'arg')
     const result = 'test-result'
 
@@ -85,7 +85,7 @@ describe('ReactiveDatabase', () => {
 
   it('creates immutable database with withError()', () => {
     const rdb = new Database()
-    const errPred = (_db: Database, _arg: string): any => undefined
+    const errPred = (_arg: string): any => undefined
     const e = expr(errPred, 'arg')
     const err = new Error('bad')
 
@@ -99,7 +99,7 @@ describe('ReactiveDatabase', () => {
 
   it('returns affected expressions with withErrorGetAffectedRels()', () => {
     const rdb = new Database()
-    const errPred = (_db: Database, _arg: string): any => undefined
+    const errPred = (_arg: string): any => undefined
     const e = expr(errPred, 'arg')
     const err = new Error('bad')
 
@@ -114,13 +114,13 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a base expression
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
     const baseExpr = expr(base)
     const db1 = rdb.with(baseExpr, 'base-value')
 
     // Create a dependent expression that uses the base
-    const dependentFunc = (db: Database) => {
-      const baseValue = db.spyResult(baseExpr)
+    const dependentFunc = () => {
+      const baseValue = spy(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -133,13 +133,13 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Set up base expression
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
     const baseExpr = expr(base)
     const db1 = rdb.with(baseExpr, 'value1')
 
     // Create dependent expression
-    const dependentFunc = (db: Database) => {
-      const baseValue = db.spyResult(baseExpr)
+    const dependentFunc = () => {
+      const baseValue = spy(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -160,8 +160,8 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Base expressions
-    const base1Pred = (_db: Database): any => undefined
-    const base2Pred = (_db: Database): any => undefined
+    const base1Pred = (): any => undefined
+    const base2Pred = (): any => undefined
     const base1 = expr(base1Pred)
     const base2 = expr(base2Pred)
 
@@ -169,17 +169,17 @@ describe('ReactiveDatabase', () => {
     let db = rdb.with(base1, 'value1').with(base2, 'value2')
 
     // Dependent expressions
-    const func1 = (db: Database) => {
-      const val1 = db.spyResult(base1)
+    const func1 = () => {
+      const val1 = spy(base1)
       return `func1-${val1}`
     }
-    const func2 = (db: Database) => {
-      const val2 = db.spyResult(base2)
+    const func2 = () => {
+      const val2 = spy(base2)
       return `func2-${val2}`
     }
-    const func3 = (db: Database) => {
-      const val1 = db.spyResult(expr(func1))
-      const val2 = db.spyResult(expr(func2))
+    const func3 = () => {
+      const val1 = spy(expr(func1))
+      const val2 = spy(expr(func2))
       return `func3-${val1}-${val2}`
     }
 
@@ -201,7 +201,7 @@ describe('ReactiveDatabase', () => {
 
   it('maintains immutability when creating new instances', () => {
     const rdb = new Database()
-    const testPred = (_db: Database): any => undefined
+    const testPred = (): any => undefined
     const e = expr(testPred)
 
     const db1 = rdb.with(e, 'value1')
@@ -218,19 +218,19 @@ describe('ReactiveDatabase', () => {
 
   it('handles function expressions with multiple arguments', () => {
     const rdb = new Database()
-    const func = vi.fn((db, arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
+    const func = vi.fn((arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
     const e = expr(func, 'a', 'b', 'c')
 
     const result = rdb.getResult(e)
     expect(result).toBe('a-b-c')
-    expect(func).toHaveBeenCalledWith(rdb, 'a', 'b', 'c')
+    expect(func).toHaveBeenCalledWith('a', 'b', 'c')
   })
 
   it('caches computed results for function expressions', () => {
     const rdb = new Database()
     let callCount = 0
 
-    const func = (db: Database, arg: string) => {
+    const func = (arg: string) => {
       callCount++
       return `computed-${arg}-${callCount}`
     }
@@ -251,16 +251,16 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a chain of dependent expressions
-    const counter = (_db: Database): any => undefined
+    const counter = (): any => undefined
     const baseExpr = expr(counter)
-    const doubleFunc = (db: Database) => {
-      const count = db.spyResult(baseExpr) || 0
+    const doubleFunc = () => {
+      const count = spy(baseExpr) || 0
       return count * 2
     }
     const doubleExpr = expr(doubleFunc)
 
-    const quadrupleFunc = (db: Database) => {
-      const doubled = db.spyResult(doubleExpr)
+    const quadrupleFunc = () => {
+      const doubled = spy(doubleExpr)
       return doubled * 2
     }
     const quadrupleExpr = expr(quadrupleFunc)
@@ -278,7 +278,7 @@ describe('ReactiveDatabase', () => {
 
   it('withModified creates new database with modified expression result', () => {
     const rdb = new Database()
-    const testPred = (_db: Database, _arg: string): any => undefined
+    const testPred = (_arg: string): any => undefined
     const e = expr(testPred, 'arg')
     const initialResult = 'initial-value'
 
@@ -297,7 +297,7 @@ describe('ReactiveDatabase', () => {
 
   it('withModifiedGetAffectedRels returns affected expressions', () => {
     const rdb = new Database()
-    const testPred = (_db: Database, _arg: string): any => undefined
+    const testPred = (_arg: string): any => undefined
     const e = expr(testPred, 'arg')
     const initialResult = 'initial-value'
 
@@ -315,15 +315,15 @@ describe('ReactiveDatabase', () => {
 
   it('withModified invalidates dependent expressions', () => {
     const rdb = new Database()
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
 
     // Set up base expression
     const baseExpr = expr(base)
     const db1 = rdb.with(baseExpr, 'original')
 
     // Create dependent expression
-    const dependentFunc = (db: Database) => {
-      const baseValue = db.spyResult(baseExpr)
+    const dependentFunc = () => {
+      const baseValue = spy(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -343,7 +343,7 @@ describe('ReactiveDatabase', () => {
 
   it('withModified handles undefined initial values', () => {
     const rdb = new Database()
-    const nonexistent = (_db: Database): any => undefined
+    const nonexistent = (): any => undefined
     const e = expr(nonexistent)
 
     // Modify an expression that doesn't have a result (undefined)
@@ -355,15 +355,15 @@ describe('ReactiveDatabase', () => {
 
   it('withModifiedGetAffectedRels includes dependent expressions in affected set', () => {
     const rdb = new Database()
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
 
     // Set up base expression
     const baseExpr = expr(base)
     const db1 = rdb.with(baseExpr, 'original')
 
     // Create dependent expression
-    const dependentFunc = (db: Database) => {
-      const baseValue = db.spyResult(baseExpr)
+    const dependentFunc = () => {
+      const baseValue = spy(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -382,7 +382,7 @@ describe('ReactiveDatabase', () => {
 
   it('withModified maintains immutability across multiple modifications', () => {
     const rdb = new Database()
-    const counter = (_db: Database): any => undefined
+    const counter = (): any => undefined
     const e = expr(counter)
 
     const db1 = rdb.with(e, 0)
@@ -433,10 +433,10 @@ describe('ReactiveDatabase', () => {
 
   it('invalidates cached errors when dependencies change', () => {
     const db = new Database()
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
     const baseExpr = expr(base)
-    const throwingFunc = vi.fn((db: Database) => {
-      const value = db.spyResult(baseExpr)
+    const throwingFunc = vi.fn(() => {
+      const value = spy(baseExpr)
       if (value === 'bad') {
         throw new Error('bad')
       }
@@ -471,9 +471,9 @@ describe('ReactiveDatabase', () => {
 
   it('propagates errors set by withError to dependent expressions', () => {
     const db = new Database()
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
     const baseExpr = expr(base)
-    const dependentFunc = vi.fn((db: Database) => `dep-${db.spyResult(baseExpr)}`)
+    const dependentFunc = vi.fn(() => `dep-${spy(baseExpr)}`)
     const dependentExpr = expr(dependentFunc)
 
     const db1 = db.with(baseExpr, 'ok')
@@ -494,19 +494,19 @@ describe('ReactiveDatabase', () => {
 
   it('allows dependent predicates to catch errors', () => {
     const db = new Database()
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
     const baseExpr = expr(base)
     const innerError = new Error('inner')
-    const innerFunc = vi.fn((db: Database) => {
-      const value = db.spyResult(baseExpr)
+    const innerFunc = vi.fn(() => {
+      const value = spy(baseExpr)
       if (value === 'bad') {
         throw innerError
       }
       return `inner-${value}`
     })
-    const outerFunc = vi.fn((db: Database) => {
+    const outerFunc = vi.fn(() => {
       try {
-        return `outer-${db.spyResult(expr(innerFunc))}`
+        return `outer-${spy(expr(innerFunc))}`
       } catch (err) {
         return 'outer-fallback'
       }
@@ -522,17 +522,17 @@ describe('ReactiveDatabase', () => {
 
   it('propagates errors through dependent expressions', () => {
     const rdb = new Database()
-    const base = (_db: Database): any => undefined
+    const base = (): any => undefined
     const baseExpr = expr(base)
     const innerError = new Error('inner')
-    const innerFunc = vi.fn((db: Database) => {
-      const value = db.spyResult(baseExpr)
+    const innerFunc = vi.fn(() => {
+      const value = spy(baseExpr)
       if (value === 'bad') {
         throw innerError
       }
       return `inner-${value}`
     })
-    const outerFunc = vi.fn((db: Database) => `outer-${db.spyResult(expr(innerFunc))}`)
+    const outerFunc = vi.fn(() => `outer-${spy(expr(innerFunc))}`)
 
     let db = rdb.with(baseExpr, 'bad')
     let caughtError
@@ -556,5 +556,64 @@ describe('ReactiveDatabase', () => {
     db = db.with(baseExpr, 'good')
     expect(db.getResult(expr(outerFunc))).toBe('outer-inner-good')
     expect(innerFunc).toHaveBeenCalledTimes(2)
+  })
+
+  it('spy outside a computation evaluates the predicate directly without caching', () => {
+    let callCount = 0
+    const func = vi.fn((arg: string) => {
+      callCount++
+      return `computed-${arg}-${callCount}`
+    })
+    const e = expr(func, 'test')
+
+    // No active database, so each spy call re-evaluates
+    expect(spy(e)).toBe('computed-test-1')
+    expect(spy(e)).toBe('computed-test-2')
+    expect(func).toHaveBeenCalledTimes(2)
+    expect(func).toHaveBeenCalledWith('test')
+  })
+
+  it('computations using another database restore the active database afterwards', () => {
+    const base = (): any => undefined
+    const baseExpr = expr(base)
+    const db1 = new Database().with(baseExpr, 'db1-value')
+    const db2 = new Database().with(baseExpr, 'db2-value')
+
+    // A predicate on db1 that reads from db2 via a captured closure,
+    // then also spies on a db1-local expression afterwards.
+    const outerFunc = vi.fn(() => {
+      const fromDb2 = db2.getResult(baseExpr)
+      const fromDb1 = spy(baseExpr)
+      return `${fromDb2}+${fromDb1}`
+    })
+    const outerExpr = expr(outerFunc)
+
+    expect(db1.getResult(outerExpr)).toBe('db2-value+db1-value')
+
+    // The spy after the nested db2 read must still have tracked a
+    // dependency within db1: changing db1's base invalidates outerExpr.
+    const db1b = db1.with(baseExpr, 'db1-new')
+    expect(db1b.getResult(outerExpr)).toBe('db2-value+db1-new')
+    expect(outerFunc).toHaveBeenCalledTimes(2)
+  })
+
+  it('restores the active database when a predicate throws', () => {
+    const db = new Database()
+    const boom = (): any => { throw new Error('boom') }
+    const boomExpr = expr(boom)
+
+    expect(() => db.getResult(boomExpr)).toThrow('boom')
+
+    // After the throw, there must be no leaked active database:
+    // a bare spy call should evaluate plainly instead of caching in db.
+    let plainCalls = 0
+    const plainFunc = () => {
+      plainCalls++
+      return `plain-${plainCalls}`
+    }
+    const plainExpr = expr(plainFunc)
+    expect(spy(plainExpr)).toBe('plain-1')
+    expect(spy(plainExpr)).toBe('plain-2')
+    expect(plainCalls).toBe(2)
   })
 })

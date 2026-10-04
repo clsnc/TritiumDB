@@ -5,11 +5,11 @@ export type Value = any
 export class Expression<A extends any[] = any[], R = any> implements ValueObject {
     private readonly _list: ImmList<any>
 
-    constructor(pred: (db: Database, ...args: A) => R, args: A) {
+    constructor(pred: (...args: A) => R, args: A) {
         this._list = ImmList([pred, ...args])
     }
 
-    get pred(): (db: Database, ...args: A) => R { return this._list.get(0) }
+    get pred(): (...args: A) => R { return this._list.get(0) }
     get args(): A { return this._list.shift().toArray() as A }
 
     hashCode(): number { return this._list.hashCode() }
@@ -33,7 +33,7 @@ export class Expression<A extends any[] = any[], R = any> implements ValueObject
 }
 
 export function expr<A extends any[], R>(
-    pred: (db: Database, ...args: A) => R, ...args: A
+    pred: (...args: A) => R, ...args: A
 ): Expression<A, R> {
     return new Expression(pred, args)
 }
@@ -51,6 +51,8 @@ export class RecursiveExpressionComputationError extends Error {
 class ExpressionResult {
     constructor(readonly value: Value | Error, readonly isReturnValue: boolean) {}
 }
+
+let activeDatabase: Database | null = null
 
 export class Database {
     protected currentlyComputingExprs: ImmSet<Expression>
@@ -126,6 +128,20 @@ export class Database {
     getResult<A extends any[], R>(expr: Expression<A, R>): R
     getResult(expr: Expression): any
     getResult(expr: Expression): Value {
+        return this.setActiveAndResolveResult(expr)
+    }
+
+    protected setActiveAndResolveResult(expr: Expression): Value {
+        const prevActiveDatabase = activeDatabase
+        activeDatabase = this
+        try {
+            return this.resolveResult(expr)
+        } finally {
+            activeDatabase = prevActiveDatabase
+        }
+    }
+
+    protected resolveResult(expr: Expression): Value {
         // If there is already a cached result for this expression, return it
         const cachedResult = this.exprToCachedResult.get(expr)
         if(cachedResult) {
@@ -161,16 +177,15 @@ export class Database {
         return affectedExprs
     }
 
-    spyResult<A extends any[], R>(expr: Expression<A, R>): R
-    spyResult(expr: Expression): any
-    spyResult(expr: Expression): any {
-        /* If there is a currently computing expression, then that expression must depend on the one 
+    /** @internal Only called by module-level `spy`; requires this to already be the active database. */
+    recordDependencyAndResolve(expr: Expression): Value {
+        /* If there is a currently computing expression, then that expression must depend on the one
            whose result is being requested. So that dependency should be recorded. */
         if (this.currentDeepestComputingExpr !== null) {
             this.addDependency(this.currentDeepestComputingExpr, expr)
         }
 
-        return this.getResult(expr)
+        return this.resolveResult(expr)
     }
 
     protected updateExprCacheAndGetResult(expr: Expression): any {
@@ -195,7 +210,7 @@ export class Database {
         let gotReturn: boolean
         let result
         try {
-            result = expr.pred(this, ...expr.args)
+            result = expr.pred(...expr.args)
             gotReturn = true
         } catch(err) {
             result = err
@@ -263,4 +278,16 @@ export class Database {
         const newResult = modifier(this.getResult(expr))
         return this.withGetAffectedRels(expr, newResult)
     }
+}
+
+export function spy<A extends any[], R>(expr: Expression<A, R>): R
+export function spy(expr: Expression): any
+export function spy(expr: Expression): Value {
+    // Outside of a computation there is no database to track dependencies in,
+    // so just evaluate the predicate directly.
+    if (activeDatabase === null) {
+        return expr.pred(...expr.args)
+    }
+
+    return activeDatabase.recordDependencyAndResolve(expr)
 }
