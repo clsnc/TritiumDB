@@ -125,9 +125,7 @@ export class Database {
         return discoveredExprs.subtract(blockedExprs)
     }
 
-    getResult<A extends any[], R>(expr: Expression<A, R>): R
-    getResult(expr: Expression): any
-    getResult(expr: Expression): Value {
+    getResult<A extends any[], R>(expr: Expression<A, R>): R {
         return this.setActiveAndResolveResult(expr)
     }
 
@@ -280,9 +278,7 @@ export class Database {
     }
 }
 
-export function spy<A extends any[], R>(expr: Expression<A, R>): R
-export function spy(expr: Expression): any
-export function spy(expr: Expression): Value {
+export function spy<A extends any[], R>(expr: Expression<A, R>): R {
     // Outside of a computation there is no database to track dependencies in,
     // so just evaluate the predicate directly.
     if (activeDatabase === null) {
