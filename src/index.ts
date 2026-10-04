@@ -1,4 +1,5 @@
 export { Database, spy } from './database'
 export { Expression, expr } from './expression'
 export { Reactor } from './reactor'
+export { DynamicVar, value } from './dynamic_var'
 export { useResult } from './reactor_hooks'
