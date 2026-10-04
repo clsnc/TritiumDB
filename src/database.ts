@@ -1,5 +1,4 @@
 import { List as ImmList, Map as ImmMap, Set as ImmSet, is, ValueObject } from "immutable"
-import { ReactiveEntity, ReactiveEntityData, StableEntityId, property } from "./entities"
 
 export type Value = any
 
@@ -355,19 +354,5 @@ export class Database {
         // The new result is the old result with the modifier function applied to it
         const newResult = modifier(this.getResult(expr))
         return this.withGetAffectedRels(expr, newResult)
-    }
-
-    createEntity<T extends ReactiveEntityData>(entries: T, id: StableEntityId): ReactiveEntity<T> {
-        const entity = new ReactiveEntity<T>(id)
-        for (const [key, value] of Object.entries(entries)) {
-            this.setEntityProperty(entity, key, value)
-        }
-        return entity
-    }
-
-    protected setEntityProperty<T extends ReactiveEntityData, K extends keyof T>(
-        entity: ReactiveEntity<T>, key: K, value: T[K]
-    ): void {
-        this.setDerivative(new Expression(property, [entity, key]), value)
     }
 }
