@@ -1,5 +1,5 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
-import { Database, Expression, Value } from './database';
+import { Database, Expression } from './database';
 
 export class Reactor {
     private db: Database;
@@ -17,7 +17,7 @@ export class Reactor {
         this.invalidatedExprsPendingSubscriberNotifications = this.invalidatedExprsPendingSubscriberNotifications.union(affectedExprs);
     }
 
-    subscribe(expr: Expression, callback: () => void): () => void {
+    subscribe<A extends any[], R>(expr: Expression<A, R>, callback: () => void): () => void {
         // Get the result. The result won't be used, but it any dependencies to be established for expressions with function predicates.
         this.db.getResult(expr)
 
@@ -46,16 +46,16 @@ export class Reactor {
         };
     }
 
-    getResult(expr: Expression) {
+    getResult<A extends any[], R>(expr: Expression<A, R>): R {
         return this.db.getResult(expr);
     }
 
     // TODO: Add testing for this
-    modify(expr: Expression, modifier: (oldValue: Value) => Value): void {
+    modify<A extends any[], R>(expr: Expression<A, R>, modifier: (oldValue: R) => R): void {
         this.applyChangeFunc(() => this.db.withModifiedGetAffectedRels(expr, modifier))
     }
 
-    set(expr: Expression, result: Value): void {
+    set<A extends any[], R>(expr: Expression<A, R>, result: R): void {
         this.applyChangeFunc(() => this.db.withGetAffectedRels(expr, result))
     }
 

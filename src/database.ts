@@ -129,7 +129,7 @@ export class Database {
         return this.setActiveAndResolveResult(expr)
     }
 
-    protected setActiveAndResolveResult(expr: Expression): Value {
+    protected setActiveAndResolveResult<A extends any[], R>(expr: Expression<A, R>): R {
         const prevActiveDatabase = activeDatabase
         activeDatabase = this
         try {
@@ -139,7 +139,7 @@ export class Database {
         }
     }
 
-    protected resolveResult(expr: Expression): Value {
+    protected resolveResult<A extends any[], R>(expr: Expression<A, R>): R {
         // If there is already a cached result for this expression, return it
         const cachedResult = this.exprToCachedResult.get(expr)
         if(cachedResult) {
@@ -176,7 +176,7 @@ export class Database {
     }
 
     /** @internal Only called by module-level `spy`; requires this to already be the active database. */
-    recordDependencyAndResolve(expr: Expression): Value {
+    recordDependencyAndResolve<A extends any[], R>(expr: Expression<A, R>): R {
         /* If there is a currently computing expression, then that expression must depend on the one
            whose result is being requested. So that dependency should be recorded. */
         if (this.currentDeepestComputingExpr !== null) {
@@ -186,7 +186,7 @@ export class Database {
         return this.resolveResult(expr)
     }
 
-    protected updateExprCacheAndGetResult(expr: Expression): any {
+    protected updateExprCacheAndGetResult<A extends any[], R>(expr: Expression<A, R>): R {
         /* Compute the result unless we are already computing, in which case
            we throw an error, as this means we are in a recursive call */
         if (this.currentlyComputingExprs.has(expr)) {
@@ -206,7 +206,7 @@ export class Database {
 
         // Compute the result or error
         let gotReturn: boolean
-        let result
+        let result: R | unknown
         try {
             result = expr.pred(...expr.args)
             gotReturn = true
@@ -227,6 +227,7 @@ export class Database {
 
         if(gotReturn) {
             // If there was no error, return the result
+            // @ts-expect-error gotReturn being true means that result's type is R, not unknown
             return result
         } else {
             // If there was an error, rethrow it
