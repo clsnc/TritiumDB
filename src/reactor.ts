@@ -1,5 +1,6 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
-import { Database, Expression } from './database';
+import { Database } from './database';
+import { Expression } from './expression';
 
 export class Reactor {
     private db: Database;

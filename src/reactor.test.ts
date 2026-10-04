@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
-import { expr, spy } from './database';
+import { expr } from './expression';
+import { spy } from './database';
 
 describe('DatabaseReactor', () => {
     it('getResult returns set value', () => {

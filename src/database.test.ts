@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, RecursiveExpressionComputationError, expr, spy } from './database'
+import { Database, RecursiveExpressionComputationError, spy } from './database'
+import { expr } from './expression'
 
 describe('ReactiveDatabase', () => {
   it('creates a ReactiveDatabase instance', () => {
@@ -16,17 +17,6 @@ describe('ReactiveDatabase', () => {
     const result = rdb.getResult(e)
     expect(result).toBe('computed-test-arg')
     expect(func).toHaveBeenCalledWith('test-arg')
-  })
-
-  it('Expression toString produces correct JSON with named and anonymous predicates', () => {
-    function namedPred(x: number, y: string) { return undefined }
-
-    expect(expr(namedPred, 1, 'hello').toString()).toBe(
-      JSON.stringify({ pred: 'namedPred', args: [1, 'hello'] })
-    )
-    expect(expr(() => undefined).toString()).toBe(
-      JSON.stringify({ pred: 'anonymous', args: [] })
-    )
   })
 
   it('throws RecursiveExpressionComputationError for recursive computation of the same expression', () => {
