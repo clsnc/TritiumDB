@@ -1,4 +1,4 @@
-import { List as ImmList, Map as ImmMap, Set as ImmSet, is, ValueObject } from "immutable"
+import { List as ImmList, Map as ImmMap, Set as ImmSet, ValueObject } from "immutable"
 
 export type Value = any
 
@@ -36,27 +36,6 @@ export function expr<A extends any[], R>(
     pred: (db: Database, ...args: A) => R, ...args: A
 ): Expression<A, R> {
     return new Expression(pred, args)
-}
-
-export class DerivativeId implements ValueObject {
-    constructor(
-        readonly creatingExpr: Expression,
-        readonly uniqueKey: any
-    ) {}
-
-    hashCode(): number {
-        return ImmList([this.creatingExpr, this.uniqueKey]).hashCode()
-    }
-
-    equals(other: unknown): boolean {
-        return other instanceof DerivativeId
-            && this.creatingExpr.equals(other.creatingExpr)
-            && is(this.uniqueKey, other.uniqueKey)
-    }
-
-    toString(): string {
-        return JSON.stringify(this)
-    }
 }
 
 export class RecursiveExpressionComputationError extends Error {
@@ -98,14 +77,6 @@ export class Database {
 
         // Record the dependent expression in the set of the contributor expression's dependents
         this.exprToDependentExprs = this.exprToDependentExprs.update(contributorExpr, dependentExprs => (dependentExprs || ImmSet()).add(dependentExpr))
-    }
-
-    getDerivativeId(uniqueKey: any = undefined): DerivativeId {
-        if (this.currentDeepestComputingExpr === null) {
-            throw new Error("getDerivativeId can only be called during expression computation")
-        }
-
-        return new DerivativeId(this.currentDeepestComputingExpr, uniqueKey)
     }
 
     protected clearExprDependencies(expr: Expression): void {
@@ -168,75 +139,12 @@ export class Database {
             }
         }
 
-        // Check if any terms in the expression are derivative IDs and recompute their creating expressions if needed
-        /* TODO: It is possible for derivative expressions to be set using derivative IDs that were created during the computation 
-           of other expressions. In those cases, this will fail to compute the expression needed to set the derivative expression. 
-           Some strategy should be figured out to determine what expression actually needs to be recomputed to get the derivative 
-           expression to be set. */
-        // TODO: Add proper handling and testing for errors thrown here by the creating expression
-        for (const term of expr) {
-            if (term instanceof DerivativeId) {
-                const creatingExpr = term.creatingExpr
-                if (!this.exprToCachedResult.has(creatingExpr) && !this.currentlyComputingExprs.has(creatingExpr)) {
-                    try {
-                        // Recompute the creating expression so it can set the derivative expression
-                        this.getResult(creatingExpr)
-                    } catch (err) {
-                        /* If recomputing the creating expression re-enters the current expression, we still
-                           allow this path when the derivative expression has already been set as a side effect. 
-                           Otherwise, preserve the original error behavior. */
-                        if(err instanceof RecursiveExpressionComputationError && this.exprToCachedResult.has(expr)) {
-                            /* Since the current expression now has a cached value, it's possible that the functions that threw 
-                               recursion errors will succeed if reevaluated in the future, even without changes to their dependencies. 
-                               Because of this, the cached recursion errors should be removed so that those functions will be reevaluated 
-                               if called again. Expressions whose caches need to be cleared can be found by starting with the expression 
-                               that originally threw the recursion error and working upward through its dependents, stopping at the current 
-                               expression. Because those expressions needed to be computed now and were not already cached, they must not 
-                               have any pre-existing dependents. So there is no chance of accidentally clearing cached results that 
-                               shouldn't be cleared. */
-                            const exprsToClearCache = this.getAllDependentExprsIncludingSeed(err.recursiveExpr, [expr])
-                            this.exprToCachedResult = this.exprToCachedResult.deleteAll(exprsToClearCache)
-                        } else {
-                            throw err
-                        }
-                    }
-                }
-            }
-        }
-
-        // After checking derivative IDs, return the cached result if it exists
-        const cachedAfterDerivativeIdCheck = this.exprToCachedResult.get(expr)
-        if(cachedAfterDerivativeIdCheck) {
-            const { value, isReturnValue } = cachedAfterDerivativeIdCheck
-
-            // Return the return value or throw the error, depending on which it is
-            if(isReturnValue) {
-                return value
-            } else {
-                throw value
-            }
-        }
-
         // If there is still no cached result, compute and cache one using the predicate function
         return this.updateExprCacheAndGetResult(expr)
     }
 
     protected setDeepestComputingExpr(expr: Expression | null): void {
         this.currentDeepestComputingExpr = expr
-    }
-
-    setDerivative<A extends any[], R>(expr: Expression<A, R>, result: R): void {
-        if (this.currentDeepestComputingExpr === null) {
-            throw new Error("setDerivative can only be called during expression computation")
-        }
-
-        // Set the result
-        /* Any dependencies on this derivative expression should have been invalidated when the setting expression was, 
-           so getting affected expressions shouldn't be significant waste of compute. */
-        this.setResultGetAffectedExprs(expr, new ExpressionResult(result, true))
-
-        // Mark the derivative expression as dependent on the currently computing expression
-        this.addDependency(expr, this.currentDeepestComputingExpr)
     }
 
     protected setResultGetAffectedExprs(expr: Expression, result: ExpressionResult): ImmSet<Expression> {
