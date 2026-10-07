@@ -23,21 +23,6 @@ describe('DatabaseReactor', () => {
         expect(callback).toHaveBeenCalledTimes(1);
     });
 
-    it('setError stores an error and notifies subscribers', () => {
-        const reactor = new Reactor();
-        const pred = (_arg: string): any => undefined;
-        const callback = vi.fn();
-        const e = expr(pred, 'arg1');
-        const err = new Error('boom');
-        reactor.subscribe(e, callback);
-
-        reactor.setError(e, err);
-        reactor.flushNotifications();
-
-        expect(() => reactor.getResult(e)).toThrow(err);
-        expect(callback).toHaveBeenCalledTimes(1);
-    });
-
     it('set does not notify for unaffected expression', () => {
         const reactor = new Reactor();
         const pred = (_arg: string): any => undefined;

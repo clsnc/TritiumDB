@@ -73,33 +73,6 @@ describe('ReactiveDatabase', () => {
     expect(newDb.getResult(e)).toBe(result)
   })
 
-  it('creates immutable database with withError()', () => {
-    const rdb = new Database()
-    const errPred = (_arg: string): any => undefined
-    const e = expr(errPred, 'arg')
-    const err = new Error('bad')
-
-    const newDb = rdb.withError(e, err)
-
-    expect(newDb).toBeInstanceOf(Database)
-    expect(newDb).not.toBe(rdb)
-    expect(() => newDb.getResult(e)).toThrow(err)
-    expect(rdb.getResult(e)).toBeUndefined()
-  })
-
-  it('returns affected expressions with withErrorGetAffectedRels()', () => {
-    const rdb = new Database()
-    const errPred = (_arg: string): any => undefined
-    const e = expr(errPred, 'arg')
-    const err = new Error('bad')
-
-    const [newDb, affectedExprs] = rdb.withErrorGetAffectedRels(e, err)
-
-    expect(newDb).toBeInstanceOf(Database)
-    expect(affectedExprs.has(e)).toBe(true)
-    expect(() => newDb.getResult(e)).toThrow(err)
-  })
-
   it('allows values to depend on other values', () => {
     const rdb = new Database()
 
@@ -457,29 +430,6 @@ describe('ReactiveDatabase', () => {
     const db3 = db2.with(baseExpr, 'good')
     expect(db3.getResult(e)).toBe('ok-good')
     expect(throwingFunc).toHaveBeenCalledTimes(2)
-  })
-
-  it('propagates errors set by withError to dependent expressions', () => {
-    const db = new Database()
-    const base = (): any => undefined
-    const baseExpr = expr(base)
-    const dependentFunc = vi.fn(() => `dep-${spy(baseExpr)}`)
-    const dependentExpr = expr(dependentFunc)
-
-    const db1 = db.with(baseExpr, 'ok')
-    expect(db1.getResult(dependentExpr)).toBe('dep-ok')
-    expect(dependentFunc).toHaveBeenCalledTimes(1)
-
-    const err = new Error('boom')
-    const db2 = db1.withError(baseExpr, err)
-
-    expect(() => db2.getResult(baseExpr)).toThrow(err)
-    expect(() => db2.getResult(dependentExpr)).toThrow(err)
-    expect(dependentFunc).toHaveBeenCalledTimes(2)
-
-    const db3 = db2.with(baseExpr, 'recover')
-    expect(db3.getResult(dependentExpr)).toBe('dep-recover')
-    expect(dependentFunc).toHaveBeenCalledTimes(3)
   })
 
   it('allows dependent predicates to catch errors', () => {

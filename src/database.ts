@@ -205,20 +205,7 @@ export class Database {
         return this.withGetAffectedRels(expr, result)[0]
     }
 
-    withError(expr: Expression, err: any): Database {
-        // Return just the new database
-        return this.withErrorGetAffectedRels(expr, err)[0]
-    }
-
-    withErrorGetAffectedRels(expr: Expression, err: Value): [Database, ImmSet<Expression>] {
-        return this.withResultGetAffectedRels(expr, new ExpressionResult(err, false))
-    }
-
     withGetAffectedRels<A extends any[], R>(expr: Expression<A, R>, resVal: R): [Database, ImmSet<Expression>] {
-        return this.withResultGetAffectedRels(expr, new ExpressionResult(resVal, true))
-    }
-
-    protected withResultGetAffectedRels(expr: Expression, result: ExpressionResult): [Database, ImmSet<Expression>] {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
             this.exprToCachedResult,
@@ -227,7 +214,7 @@ export class Database {
         )
 
         // Apply the change to the new database and get expressions that have been invalidated because of it
-        const affectedRels = newDb.setResultGetAffectedExprs(expr, result)
+        const affectedRels = newDb.setResultGetAffectedExprs(expr, new ExpressionResult(resVal, true))
 
         return [newDb, affectedRels]
     }
