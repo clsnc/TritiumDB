@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { Database } from './database'
 import { expr } from './expression'
 import { Atom, value } from './atom'
-import { spyExpr } from './spy'
+import { spy, spyExpr } from './spy'
 
 describe('spyExpr', () => {
   it('outside a computation evaluates the predicate directly without caching', () => {
@@ -62,5 +62,53 @@ describe('spyExpr', () => {
     expect(spyExpr(plainExpr)).toBe('plain-1')
     expect(spyExpr(plainExpr)).toBe('plain-2')
     expect(plainCalls).toBe(2)
+  })
+})
+
+describe('spy', () => {
+  it('evaluates a function with no arguments', () => {
+    const func = vi.fn(() => 'result')
+
+    const result: string = spy(func)
+
+    expect(result).toBe('result')
+    expect(func).toHaveBeenCalledWith()
+    expect(func).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes multiple arguments to the function', () => {
+    const func = vi.fn((name: string, count: number) => `${name}-${count}`)
+
+    const result: string = spy(func, 'item', 2)
+
+    expect(result).toBe('item-2')
+    expect(func).toHaveBeenCalledWith('item', 2)
+    expect(func).toHaveBeenCalledTimes(1)
+  })
+
+  it('outside a computation evaluates directly without caching', () => {
+    let callCount = 0
+    const func = vi.fn((arg: string) => `${arg}-${++callCount}`)
+
+    expect(spy(func, 'test')).toBe('test-1')
+    expect(spy(func, 'test')).toBe('test-2')
+    expect(func).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares cached results with spyExpr for the same function and arguments', () => {
+    const db = new Database()
+    const func = vi.fn((n: number) => n * 2)
+    const combined = expr(() => [
+      spy(func, 2),
+      spyExpr(expr(func, 2)),
+      spy(func, 2),
+      spy(func, 3)
+    ])
+
+    expect(db.getResult(combined)).toEqual([4, 4, 4, 6])
+    expect(db.getResult(expr(func, 2))).toBe(4)
+    expect(func).toHaveBeenCalledTimes(2)
+    expect(func).toHaveBeenNthCalledWith(1, 2)
+    expect(func).toHaveBeenNthCalledWith(2, 3)
   })
 })

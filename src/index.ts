@@ -1,5 +1,5 @@
 export { Database } from './database'
-export { spyExpr } from './spy'
+export { spy, spyExpr } from './spy'
 export { Expression, expr } from './expression'
 export { Reactor } from './reactor'
 export { Atom, value } from './atom'
