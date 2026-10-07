@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Database } from './database'
-import { spyExpr } from './spy'
+import { spy, spyExpr } from './spy'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
@@ -45,8 +45,7 @@ describe('Atom', () => {
   it('recomputes dependent expressions when overridden', () => {
     const db = new Database()
     const v = new Atom('anonymous')
-    const atomExpr = expr(value, v)
-    const greetFunc = vi.fn(() => `hi ${spyExpr(atomExpr)}`)
+    const greetFunc = vi.fn(() => `hi ${spy(value, v)}`)
     const greeting = expr(greetFunc)
 
     expect(db.getResult(greeting)).toBe('hi anonymous')
@@ -64,7 +63,7 @@ describe('Atom', () => {
     const db = new Database()
     const first = new Atom('x')
     const second = new Atom(1)
-    const combined = expr(() => `${spyExpr(expr(value, first))}-${spyExpr(expr(value, second))}`)
+    const combined = expr(() => `${spy(value, first)}-${spy(value, second)}`)
 
     expect(db.getResult(combined)).toBe('x-1')
 

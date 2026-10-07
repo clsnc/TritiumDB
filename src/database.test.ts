@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Database, RecursiveExpressionComputationError } from './database'
-import { spyExpr } from './spy'
+import { spy, spyExpr } from './spy'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
@@ -29,7 +29,7 @@ describe('ReactiveDatabase', () => {
       recursiveCallCount++
       if (recursiveCallCount === 1) {
         // First call, trigger recursion
-        return spyExpr(expr(recursiveFunc, arg))
+        return spy(recursiveFunc, arg)
       }
       return 'result'
     }
@@ -78,14 +78,13 @@ describe('ReactiveDatabase', () => {
   it('allows values to depend on other values', () => {
     const rdb = new Database()
 
-    // Create a base atom and its value expression
+    // Create a base atom
     const base = new Atom<string | undefined>(undefined)
-    const baseExpr = expr(value, base)
     const db1 = rdb.with(base, 'base-value')
 
     // Create a dependent expression that uses the base
     const dependentFunc = () => {
-      const baseValue = spyExpr(baseExpr)
+      const baseValue = spy(value, base)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -97,14 +96,13 @@ describe('ReactiveDatabase', () => {
   it('invalidates dependent expressions when an atom value changes', () => {
     const rdb = new Database()
 
-    // Set up base atom and its value expression
+    // Set up base atom
     const base = new Atom<string | undefined>(undefined)
-    const baseExpr = expr(value, base)
     const db1 = rdb.with(base, 'value1')
 
     // Create dependent expression
     const dependentFunc = () => {
-      const baseValue = spyExpr(baseExpr)
+      const baseValue = spy(value, base)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -124,27 +122,25 @@ describe('ReactiveDatabase', () => {
   it('handles complex dependency graphs', () => {
     const rdb = new Database()
 
-    // Base atoms and their value expressions
+    // Base atoms
     const atom1 = new Atom<string | undefined>(undefined)
     const atom2 = new Atom<string | undefined>(undefined)
-    const base1 = expr(value, atom1)
-    const base2 = expr(value, atom2)
 
     // Set base values
     let db = rdb.with(atom1, 'value1').with(atom2, 'value2')
 
     // Dependent expressions
     const func1 = () => {
-      const val1 = spyExpr(base1)
+      const val1 = spy(value, atom1)
       return `func1-${val1}`
     }
     const func2 = () => {
-      const val2 = spyExpr(base2)
+      const val2 = spy(value, atom2)
       return `func2-${val2}`
     }
     const func3 = () => {
-      const val1 = spyExpr(expr(func1))
-      const val2 = spyExpr(expr(func2))
+      const val1 = spy(func1)
+      const val2 = spy(func2)
       return `func3-${val1}-${val2}`
     }
 
@@ -217,9 +213,8 @@ describe('ReactiveDatabase', () => {
 
     // Create a chain of dependent expressions
     const counter = new Atom(0)
-    const baseExpr = expr(value, counter)
     const doubleFunc = () => {
-      const count = spyExpr(baseExpr) || 0
+      const count = spy(value, counter) || 0
       return count * 2
     }
     const doubleExpr = expr(doubleFunc)
@@ -282,13 +277,12 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
     const base = new Atom<string | undefined>(undefined)
 
-    // Set up base atom and its value expression
-    const baseExpr = expr(value, base)
+    // Set up base atom
     const db1 = rdb.with(base, 'original')
 
     // Create dependent expression
     const dependentFunc = () => {
-      const baseValue = spyExpr(baseExpr)
+      const baseValue = spy(value, base)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -396,13 +390,12 @@ describe('ReactiveDatabase', () => {
   it('invalidates cached errors when dependencies change', () => {
     const db = new Database()
     const base = new Atom<string | undefined>(undefined)
-    const baseExpr = expr(value, base)
     const throwingFunc = vi.fn(() => {
-      const value = spyExpr(baseExpr)
-      if (value === 'bad') {
+      const baseValue = spy(value, base)
+      if (baseValue === 'bad') {
         throw new Error('bad')
       }
-      return `ok-${value}`
+      return `ok-${baseValue}`
     })
 
     const e = expr(throwingFunc)
@@ -434,18 +427,17 @@ describe('ReactiveDatabase', () => {
   it('allows dependent predicates to catch errors', () => {
     const db = new Database()
     const base = new Atom<string | undefined>(undefined)
-    const baseExpr = expr(value, base)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
-      const value = spyExpr(baseExpr)
-      if (value === 'bad') {
+      const baseValue = spy(value, base)
+      if (baseValue === 'bad') {
         throw innerError
       }
-      return `inner-${value}`
+      return `inner-${baseValue}`
     })
     const outerFunc = vi.fn(() => {
       try {
-        return `outer-${spyExpr(expr(innerFunc))}`
+        return `outer-${spy(innerFunc)}`
       } catch (err) {
         return 'outer-fallback'
       }
@@ -462,16 +454,15 @@ describe('ReactiveDatabase', () => {
   it('propagates errors through dependent expressions', () => {
     const rdb = new Database()
     const base = new Atom<string | undefined>(undefined)
-    const baseExpr = expr(value, base)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
-      const value = spyExpr(baseExpr)
-      if (value === 'bad') {
+      const baseValue = spy(value, base)
+      if (baseValue === 'bad') {
         throw innerError
       }
-      return `inner-${value}`
+      return `inner-${baseValue}`
     })
-    const outerFunc = vi.fn(() => `outer-${spyExpr(expr(innerFunc))}`)
+    const outerFunc = vi.fn(() => `outer-${spy(innerFunc)}`)
 
     let db = rdb.with(base, 'bad')
     let caughtError
