@@ -22,7 +22,7 @@ describe('Atom', () => {
     const v = new Atom('anonymous')
     const atomExpr = expr(value, v)
 
-    const db2 = db.with(atomExpr, 'colson')
+    const db2 = db.with(v, 'colson')
 
     expect(db2.getResult(atomExpr)).toBe('colson')
     expect(db.getResult(atomExpr)).toBe('anonymous')
@@ -36,7 +36,7 @@ describe('Atom', () => {
     expect(expr(value, v1).equals(expr(value, v1))).toBe(true)
     expect(expr(value, v1).equals(expr(value, v2))).toBe(false)
 
-    const db2 = db.with(expr(value, v1), 'overridden')
+    const db2 = db.with(v1, 'overridden')
     expect(db2.getResult(expr(value, v1))).toBe('overridden')
     expect(db2.getResult(expr(value, v2))).toBe('same')
   })
@@ -51,7 +51,7 @@ describe('Atom', () => {
     expect(db.getResult(greeting)).toBe('hi anonymous')
     expect(greetFunc).toHaveBeenCalledTimes(1)
 
-    const db2 = db.with(atomExpr, 'colson')
+    const db2 = db.with(v, 'colson')
     expect(db2.getResult(greeting)).toBe('hi colson')
     expect(greetFunc).toHaveBeenCalledTimes(2)
 
@@ -67,7 +67,7 @@ describe('Atom', () => {
 
     expect(db.getResult(combined)).toBe('x-1')
 
-    const db2 = db.with(expr(value, first), 'y').with(expr(value, second), 2)
+    const db2 = db.with(first, 'y').with(second, 2)
     expect(db2.getResult(combined)).toBe('y-2')
   })
 })

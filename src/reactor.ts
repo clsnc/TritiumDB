@@ -1,6 +1,7 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database } from './database';
 import { Expression } from './expression';
+import { Atom } from './atom';
 
 export class Reactor {
     private db: Database;
@@ -52,12 +53,12 @@ export class Reactor {
     }
 
     // TODO: Add testing for this
-    modify<A extends any[], R>(expr: Expression<A, R>, modifier: (oldValue: R) => R): void {
-        this.applyChangeFunc(() => this.db.withModifiedGetAffectedRels(expr, modifier))
+    modify<T>(atom: Atom<T>, modifier: (oldValue: T) => T): void {
+        this.applyChangeFunc(() => this.db.withModifiedGetAffectedRels(atom, modifier))
     }
 
-    set<A extends any[], R>(expr: Expression<A, R>, result: R): void {
-        this.applyChangeFunc(() => this.db.withGetAffectedRels(expr, result))
+    set<T>(atom: Atom<T>, nextValue: T): void {
+        this.applyChangeFunc(() => this.db.withGetAffectedRels(atom, nextValue))
     }
 
     flushNotifications(): void {

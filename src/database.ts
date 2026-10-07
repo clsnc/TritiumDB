@@ -1,5 +1,6 @@
 import { Map as ImmMap, Set as ImmSet } from "immutable"
-import { Expression } from "./expression"
+import { Expression, expr } from "./expression"
+import { Atom, value } from "./atom"
 
 export type Value = any
 
@@ -200,12 +201,12 @@ export class Database {
         }
     }
 
-    with<A extends any[], R>(expr: Expression<A, R>, result: R): Database {
+    with<T>(atom: Atom<T>, nextValue: T): Database {
         // Return just the new database
-        return this.withGetAffectedRels(expr, result)[0]
+        return this.withGetAffectedRels(atom, nextValue)[0]
     }
 
-    withGetAffectedRels<A extends any[], R>(expr: Expression<A, R>, resVal: R): [Database, ImmSet<Expression>] {
+    withGetAffectedRels<T>(atom: Atom<T>, nextValue: T): [Database, ImmSet<Expression>] {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
             this.exprToCachedResult,
@@ -214,20 +215,20 @@ export class Database {
         )
 
         // Apply the change to the new database and get expressions that have been invalidated because of it
-        const affectedRels = newDb.setResultGetAffectedExprs(expr, new ExpressionResult(resVal, true))
+        const affectedRels = newDb.setResultGetAffectedExprs(expr(value, atom), new ExpressionResult(nextValue, true))
 
         return [newDb, affectedRels]
     }
 
-    withModified<A extends any[], R>(expr: Expression<A, R>, modifier: (val: R) => R): Database {
+    withModified<T>(atom: Atom<T>, modifier: (oldValue: T) => T): Database {
         // Return just the new database
-        return this.withModifiedGetAffectedRels(expr, modifier)[0]
+        return this.withModifiedGetAffectedRels(atom, modifier)[0]
     }
 
-    withModifiedGetAffectedRels<A extends any[], R>(expr: Expression<A, R>, modifier: (oldResult: R) => R): [Database, ImmSet<Expression>] {
-        // The new result is the old result with the modifier function applied to it
-        const newResult = modifier(this.getResult(expr))
-        return this.withGetAffectedRels(expr, newResult)
+    withModifiedGetAffectedRels<T>(atom: Atom<T>, modifier: (oldValue: T) => T): [Database, ImmSet<Expression>] {
+        // The new value is the old value with the modifier function applied to it
+        const nextValue = modifier(this.getResult(expr(value, atom)))
+        return this.withGetAffectedRels(atom, nextValue)
     }
 }
 

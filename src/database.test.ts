@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Database, RecursiveExpressionComputationError, spy } from './database'
 import { expr } from './expression'
+import { Atom, value } from './atom'
 
 describe('ReactiveDatabase', () => {
   it('creates a ReactiveDatabase instance', () => {
@@ -48,11 +49,11 @@ describe('ReactiveDatabase', () => {
 
   it('creates immutable database with with() method', () => {
     const rdb = new Database()
-    const testPred = (_arg: string): any => undefined
-    const e = expr(testPred, 'arg')
+    const atom = new Atom<string | undefined>(undefined)
+    const e = expr(value, atom)
     const result = 'test-result'
 
-    const newDb = rdb.with(e, result)
+    const newDb = rdb.with(atom, result)
 
     expect(newDb).toBeInstanceOf(Database)
     expect(newDb).not.toBe(rdb) // Should be a new instance
@@ -62,11 +63,11 @@ describe('ReactiveDatabase', () => {
 
   it('returns affected expressions with withGetAffectedRels()', () => {
     const rdb = new Database()
-    const testPred = (_arg: string): any => undefined
-    const e = expr(testPred, 'arg')
+    const atom = new Atom<string | undefined>(undefined)
+    const e = expr(value, atom)
     const result = 'test-result'
 
-    const [newDb, affectedExprs] = rdb.withGetAffectedRels(e, result)
+    const [newDb, affectedExprs] = rdb.withGetAffectedRels(atom, result)
 
     expect(newDb).toBeInstanceOf(Database)
     expect(affectedExprs.has(e)).toBe(true)
@@ -76,10 +77,10 @@ describe('ReactiveDatabase', () => {
   it('allows values to depend on other values', () => {
     const rdb = new Database()
 
-    // Create a base expression
-    const base = (): any => undefined
-    const baseExpr = expr(base)
-    const db1 = rdb.with(baseExpr, 'base-value')
+    // Create a base atom and its value expression
+    const base = new Atom<string | undefined>(undefined)
+    const baseExpr = expr(value, base)
+    const db1 = rdb.with(base, 'base-value')
 
     // Create a dependent expression that uses the base
     const dependentFunc = () => {
@@ -92,13 +93,13 @@ describe('ReactiveDatabase', () => {
     expect(result).toBe('dependent-base-value')
   })
 
-  it('invalidates dependent expressions when base expression changes', () => {
+  it('invalidates dependent expressions when an atom value changes', () => {
     const rdb = new Database()
 
-    // Set up base expression
-    const base = (): any => undefined
-    const baseExpr = expr(base)
-    const db1 = rdb.with(baseExpr, 'value1')
+    // Set up base atom and its value expression
+    const base = new Atom<string | undefined>(undefined)
+    const baseExpr = expr(value, base)
+    const db1 = rdb.with(base, 'value1')
 
     // Create dependent expression
     const dependentFunc = () => {
@@ -111,8 +112,8 @@ describe('ReactiveDatabase', () => {
     const result1 = db1.getResult(dependentExpr)
     expect(result1).toBe('dependent-value1')
 
-    // Update base expression
-    const db2 = db1.with(baseExpr, 'value2')
+    // Update base atom
+    const db2 = db1.with(base, 'value2')
 
     // Dependent should be recomputed with new base value
     const result2 = db2.getResult(dependentExpr)
@@ -122,14 +123,14 @@ describe('ReactiveDatabase', () => {
   it('handles complex dependency graphs', () => {
     const rdb = new Database()
 
-    // Base expressions
-    const base1Pred = (): any => undefined
-    const base2Pred = (): any => undefined
-    const base1 = expr(base1Pred)
-    const base2 = expr(base2Pred)
+    // Base atoms and their value expressions
+    const atom1 = new Atom<string | undefined>(undefined)
+    const atom2 = new Atom<string | undefined>(undefined)
+    const base1 = expr(value, atom1)
+    const base2 = expr(value, atom2)
 
     // Set base values
-    let db = rdb.with(base1, 'value1').with(base2, 'value2')
+    let db = rdb.with(atom1, 'value1').with(atom2, 'value2')
 
     // Dependent expressions
     const func1 = () => {
@@ -156,7 +157,7 @@ describe('ReactiveDatabase', () => {
     expect(db.getResult(dependent3)).toBe('func3-func1-value1-func2-value2')
 
     // Update base1 and check propagation
-    db = db.with(base1, 'new-value1')
+    db = db.with(atom1, 'new-value1')
     expect(db.getResult(dependent1)).toBe('func1-new-value1')
     expect(db.getResult(dependent2)).toBe('func2-value2') // Should be unchanged
     expect(db.getResult(dependent3)).toBe('func3-func1-new-value1-func2-value2')
@@ -164,11 +165,11 @@ describe('ReactiveDatabase', () => {
 
   it('maintains immutability when creating new instances', () => {
     const rdb = new Database()
-    const testPred = (): any => undefined
-    const e = expr(testPred)
+    const atom = new Atom<string | undefined>(undefined)
+    const e = expr(value, atom)
 
-    const db1 = rdb.with(e, 'value1')
-    const db2 = db1.with(e, 'value2')
+    const db1 = rdb.with(atom, 'value1')
+    const db2 = db1.with(atom, 'value2')
 
     // Each database should have its own state
     expect(rdb.getResult(e)).toBeUndefined()
@@ -214,8 +215,8 @@ describe('ReactiveDatabase', () => {
     const rdb = new Database()
 
     // Create a chain of dependent expressions
-    const counter = (): any => undefined
-    const baseExpr = expr(counter)
+    const counter = new Atom(0)
+    const baseExpr = expr(value, counter)
     const doubleFunc = () => {
       const count = spy(baseExpr) || 0
       return count * 2
@@ -229,28 +230,28 @@ describe('ReactiveDatabase', () => {
     const quadrupleExpr = expr(quadrupleFunc)
 
     // Initial state
-    let db = rdb.with(baseExpr, 5)
+    let db = rdb.with(counter, 5)
     expect(db.getResult(doubleExpr)).toBe(10)
     expect(db.getResult(quadrupleExpr)).toBe(20)
 
     // Update base value
-    db = db.with(baseExpr, 10)
+    db = db.with(counter, 10)
     expect(db.getResult(doubleExpr)).toBe(20)
     expect(db.getResult(quadrupleExpr)).toBe(40)
   })
 
-  it('withModified creates new database with modified expression result', () => {
+  it('withModified creates new database with modified atom value', () => {
     const rdb = new Database()
-    const testPred = (_arg: string): any => undefined
-    const e = expr(testPred, 'arg')
+    const atom = new Atom<string | undefined>(undefined)
+    const e = expr(value, atom)
     const initialResult = 'initial-value'
 
     // Set initial value
-    const db1 = rdb.with(e, initialResult)
+    const db1 = rdb.with(atom, initialResult)
 
-    // Modify the expression using withModified
-    const modifier = (oldVal: any) => `modified-${oldVal}`
-    const db2 = db1.withModified(e, modifier)
+    // Modify the atom using withModified
+    const modifier = (oldVal: string | undefined) => `modified-${oldVal}`
+    const db2 = db1.withModified(atom, modifier)
 
     expect(db2).toBeInstanceOf(Database)
     expect(db2).not.toBe(db1) // Should be a new instance
@@ -260,16 +261,16 @@ describe('ReactiveDatabase', () => {
 
   it('withModifiedGetAffectedRels returns affected expressions', () => {
     const rdb = new Database()
-    const testPred = (_arg: string): any => undefined
-    const e = expr(testPred, 'arg')
+    const atom = new Atom<string | undefined>(undefined)
+    const e = expr(value, atom)
     const initialResult = 'initial-value'
 
     // Set initial value
-    const db1 = rdb.with(e, initialResult)
+    const db1 = rdb.with(atom, initialResult)
 
-    // Modify the expression using withModifiedGetAffectedRels
-    const modifier = (oldVal: any) => `modified-${oldVal}`
-    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(e, modifier)
+    // Modify the atom value using withModifiedGetAffectedRels
+    const modifier = (oldVal: string | undefined) => `modified-${oldVal}`
+    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(atom, modifier)
 
     expect(db2).toBeInstanceOf(Database)
     expect(affectedExprs.has(e)).toBe(true)
@@ -278,11 +279,11 @@ describe('ReactiveDatabase', () => {
 
   it('withModified invalidates dependent expressions', () => {
     const rdb = new Database()
-    const base = (): any => undefined
+    const base = new Atom<string | undefined>(undefined)
 
-    // Set up base expression
-    const baseExpr = expr(base)
-    const db1 = rdb.with(baseExpr, 'original')
+    // Set up base atom and its value expression
+    const baseExpr = expr(value, base)
+    const db1 = rdb.with(base, 'original')
 
     // Create dependent expression
     const dependentFunc = () => {
@@ -295,9 +296,9 @@ describe('ReactiveDatabase', () => {
     const result1 = db1.getResult(dependentExpr)
     expect(result1).toBe('dependent-original')
 
-    // Modify base expression using withModified
-    const modifier = (oldVal: any) => `${oldVal}-modified`
-    const db2 = db1.withModified(baseExpr, modifier)
+    // Modify base atom using withModified
+    const modifier = (oldVal: string | undefined) => `${oldVal}-modified`
+    const db2 = db1.withModified(base, modifier)
 
     // Dependent should be recomputed with new base value
     const result2 = db2.getResult(dependentExpr)
@@ -306,23 +307,23 @@ describe('ReactiveDatabase', () => {
 
   it('withModified handles undefined initial values', () => {
     const rdb = new Database()
-    const nonexistent = (): any => undefined
-    const e = expr(nonexistent)
+    const atom = new Atom<string | undefined>(undefined)
+    const e = expr(value, atom)
 
-    // Modify an expression that doesn't have a result (undefined)
-    const modifier = (oldVal: any) => oldVal === undefined ? 'default-value' : `modified-${oldVal}`
-    const db2 = rdb.withModified(e, modifier)
+    // Modify an atom with an undefined default value
+    const modifier = (oldVal: string | undefined) => oldVal === undefined ? 'default-value' : `modified-${oldVal}`
+    const db2 = rdb.withModified(atom, modifier)
 
     expect(db2.getResult(e)).toBe('default-value')
   })
 
   it('withModifiedGetAffectedRels includes dependent expressions in affected set', () => {
     const rdb = new Database()
-    const base = (): any => undefined
+    const base = new Atom<string | undefined>(undefined)
 
-    // Set up base expression
-    const baseExpr = expr(base)
-    const db1 = rdb.with(baseExpr, 'original')
+    // Set up base atom and its value expression
+    const baseExpr = expr(value, base)
+    const db1 = rdb.with(base, 'original')
 
     // Create dependent expression
     const dependentFunc = () => {
@@ -334,9 +335,9 @@ describe('ReactiveDatabase', () => {
     // Compute dependent to establish dependency
     db1.getResult(dependentExpr)
 
-    // Modify base expression and get affected expressions
-    const modifier = (oldVal: any) => `${oldVal}-modified`
-    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(baseExpr, modifier)
+    // Modify base atom value and get affected expressions
+    const modifier = (oldVal: string | undefined) => `${oldVal}-modified`
+    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(base, modifier)
 
     // Both base and dependent expressions should be affected
     expect(affectedExprs.has(baseExpr)).toBe(true)
@@ -345,25 +346,22 @@ describe('ReactiveDatabase', () => {
 
   it('withModified maintains immutability across multiple modifications', () => {
     const rdb = new Database()
-    const counter = (): any => undefined
-    const e = expr(counter)
+    const counter = new Atom(0)
+    const e = expr(value, counter)
 
-    const db1 = rdb.with(e, 0)
-    const db2 = db1.withModified(e, val => val + 1)
-    const db3 = db2.withModified(e, val => val * 2)
-    const db4 = db3.withModified(e, val => val - 3)
+    const db1 = rdb.withModified(counter, val => val + 1)
+    const db2 = db1.withModified(counter, val => val * 2)
+    const db3 = db2.withModified(counter, val => val - 3)
 
     // Each database should have its own state
-    expect(rdb.getResult(e)).toBeUndefined()
-    expect(db1.getResult(e)).toBe(0)
-    expect(db2.getResult(e)).toBe(1)
-    expect(db3.getResult(e)).toBe(2)
-    expect(db4.getResult(e)).toBe(-1)
+    expect(rdb.getResult(e)).toBe(0)
+    expect(db1.getResult(e)).toBe(1)
+    expect(db2.getResult(e)).toBe(2)
+    expect(db3.getResult(e)).toBe(-1)
 
     // Original databases should be unchanged
-    expect(db1.getResult(e)).toBe(0)
-    expect(db2.getResult(e)).toBe(1)
-    expect(db3.getResult(e)).toBe(2)
+    expect(db1.getResult(e)).toBe(1)
+    expect(db2.getResult(e)).toBe(2)
   })
 
   it('caches and rethrows the same error instance', () => {
@@ -396,8 +394,8 @@ describe('ReactiveDatabase', () => {
 
   it('invalidates cached errors when dependencies change', () => {
     const db = new Database()
-    const base = (): any => undefined
-    const baseExpr = expr(base)
+    const base = new Atom<string | undefined>(undefined)
+    const baseExpr = expr(value, base)
     const throwingFunc = vi.fn(() => {
       const value = spy(baseExpr)
       if (value === 'bad') {
@@ -407,7 +405,7 @@ describe('ReactiveDatabase', () => {
     })
 
     const e = expr(throwingFunc)
-    const db2 = db.with(baseExpr, 'bad')
+    const db2 = db.with(base, 'bad')
 
     let firstError
     try {
@@ -427,15 +425,15 @@ describe('ReactiveDatabase', () => {
     expect(secondError).toBe(firstError)
     expect(throwingFunc).toHaveBeenCalledTimes(1)
 
-    const db3 = db2.with(baseExpr, 'good')
+    const db3 = db2.with(base, 'good')
     expect(db3.getResult(e)).toBe('ok-good')
     expect(throwingFunc).toHaveBeenCalledTimes(2)
   })
 
   it('allows dependent predicates to catch errors', () => {
     const db = new Database()
-    const base = (): any => undefined
-    const baseExpr = expr(base)
+    const base = new Atom<string | undefined>(undefined)
+    const baseExpr = expr(value, base)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
       const value = spy(baseExpr)
@@ -452,18 +450,18 @@ describe('ReactiveDatabase', () => {
       }
     })
 
-    const db2 = db.with(baseExpr, 'good')
+    const db2 = db.with(base, 'good')
     expect(db2.getResult(expr(outerFunc))).toBe('outer-inner-good')
 
-    const db3 = db2.with(baseExpr, 'bad')
+    const db3 = db2.with(base, 'bad')
     expect(db3.getResult(expr(outerFunc))).toBe('outer-fallback')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 
   it('propagates errors through dependent expressions', () => {
     const rdb = new Database()
-    const base = (): any => undefined
-    const baseExpr = expr(base)
+    const base = new Atom<string | undefined>(undefined)
+    const baseExpr = expr(value, base)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
       const value = spy(baseExpr)
@@ -474,7 +472,7 @@ describe('ReactiveDatabase', () => {
     })
     const outerFunc = vi.fn(() => `outer-${spy(expr(innerFunc))}`)
 
-    let db = rdb.with(baseExpr, 'bad')
+    let db = rdb.with(base, 'bad')
     let caughtError
     try {
       db.getResult(expr(outerFunc))
@@ -493,7 +491,7 @@ describe('ReactiveDatabase', () => {
 
     expect(cachedError).toBe(innerError)
 
-    db = db.with(baseExpr, 'good')
+    db = db.with(base, 'good')
     expect(db.getResult(expr(outerFunc))).toBe('outer-inner-good')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
@@ -514,10 +512,10 @@ describe('ReactiveDatabase', () => {
   })
 
   it('computations using another database restore the active database afterwards', () => {
-    const base = (): any => undefined
-    const baseExpr = expr(base)
-    const db1 = new Database().with(baseExpr, 'db1-value')
-    const db2 = new Database().with(baseExpr, 'db2-value')
+    const base = new Atom<string | undefined>(undefined)
+    const baseExpr = expr(value, base)
+    const db1 = new Database().with(base, 'db1-value')
+    const db2 = new Database().with(base, 'db2-value')
 
     // A predicate on db1 that reads from db2 via a captured closure,
     // then also spies on a db1-local expression afterwards.
@@ -532,7 +530,7 @@ describe('ReactiveDatabase', () => {
 
     // The spy after the nested db2 read must still have tracked a
     // dependency within db1: changing db1's base invalidates outerExpr.
-    const db1b = db1.with(baseExpr, 'db1-new')
+    const db1b = db1.with(base, 'db1-new')
     expect(db1b.getResult(outerExpr)).toBe('db2-value+db1-new')
     expect(outerFunc).toHaveBeenCalledTimes(2)
   })
