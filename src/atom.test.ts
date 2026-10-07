@@ -1,37 +1,37 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Database, spy } from './database'
 import { expr } from './expression'
-import { DynamicVar, value } from './dynamic_var'
+import { Atom, value } from './atom'
 
-describe('DynamicVar', () => {
+describe('Atom', () => {
   it('returns the default value when no override is set', () => {
     const db = new Database()
-    const v = new DynamicVar('anonymous')
+    const v = new Atom('anonymous')
 
     expect(db.getResult(expr(value, v))).toBe('anonymous')
   })
 
   it('returns the default value via spy outside a computation', () => {
-    const v = new DynamicVar('anonymous')
+    const v = new Atom('anonymous')
 
     expect(spy(expr(value, v))).toBe('anonymous')
   })
 
   it('returns the overridden value in the derived database only', () => {
     const db = new Database()
-    const v = new DynamicVar('anonymous')
-    const varExpr = expr(value, v)
+    const v = new Atom('anonymous')
+    const atomExpr = expr(value, v)
 
-    const db2 = db.with(varExpr, 'colson')
+    const db2 = db.with(atomExpr, 'colson')
 
-    expect(db2.getResult(varExpr)).toBe('colson')
-    expect(db.getResult(varExpr)).toBe('anonymous')
+    expect(db2.getResult(atomExpr)).toBe('colson')
+    expect(db.getResult(atomExpr)).toBe('anonymous')
   })
 
-  it('uses reference identity: vars with equal defaults are independent', () => {
+  it('uses reference identity: atoms with equal defaults are independent', () => {
     const db = new Database()
-    const v1 = new DynamicVar('same')
-    const v2 = new DynamicVar('same')
+    const v1 = new Atom('same')
+    const v2 = new Atom('same')
 
     expect(expr(value, v1).equals(expr(value, v1))).toBe(true)
     expect(expr(value, v1).equals(expr(value, v2))).toBe(false)
@@ -43,15 +43,15 @@ describe('DynamicVar', () => {
 
   it('recomputes dependent expressions when overridden', () => {
     const db = new Database()
-    const v = new DynamicVar('anonymous')
-    const varExpr = expr(value, v)
-    const greetFunc = vi.fn(() => `hi ${spy(varExpr)}`)
+    const v = new Atom('anonymous')
+    const atomExpr = expr(value, v)
+    const greetFunc = vi.fn(() => `hi ${spy(atomExpr)}`)
     const greeting = expr(greetFunc)
 
     expect(db.getResult(greeting)).toBe('hi anonymous')
     expect(greetFunc).toHaveBeenCalledTimes(1)
 
-    const db2 = db.with(varExpr, 'colson')
+    const db2 = db.with(atomExpr, 'colson')
     expect(db2.getResult(greeting)).toBe('hi colson')
     expect(greetFunc).toHaveBeenCalledTimes(2)
 
@@ -59,10 +59,10 @@ describe('DynamicVar', () => {
     expect(db.getResult(greeting)).toBe('hi anonymous')
   })
 
-  it('supports multiple vars in one computation', () => {
+  it('supports multiple atoms in one computation', () => {
     const db = new Database()
-    const first = new DynamicVar('x')
-    const second = new DynamicVar(1)
+    const first = new Atom('x')
+    const second = new Atom(1)
     const combined = expr(() => `${spy(expr(value, first))}-${spy(expr(value, second))}`)
 
     expect(db.getResult(combined)).toBe('x-1')
