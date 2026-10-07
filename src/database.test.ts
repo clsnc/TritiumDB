@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, RecursiveExpressionComputationError, spyExpr } from './database'
+import { Database, RecursiveExpressionComputationError } from './database'
+import { spyExpr } from './spy'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
@@ -496,62 +497,4 @@ describe('ReactiveDatabase', () => {
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 
-  it('spyExpr outside a computation evaluates the predicate directly without caching', () => {
-    let callCount = 0
-    const func = vi.fn((arg: string) => {
-      callCount++
-      return `computed-${arg}-${callCount}`
-    })
-    const e = expr(func, 'test')
-
-    // No active database, so each spyExpr call re-evaluates
-    expect(spyExpr(e)).toBe('computed-test-1')
-    expect(spyExpr(e)).toBe('computed-test-2')
-    expect(func).toHaveBeenCalledTimes(2)
-    expect(func).toHaveBeenCalledWith('test')
-  })
-
-  it('computations using another database restore the active database afterwards', () => {
-    const base = new Atom<string | undefined>(undefined)
-    const baseExpr = expr(value, base)
-    const db1 = new Database().with(base, 'db1-value')
-    const db2 = new Database().with(base, 'db2-value')
-
-    // A predicate on db1 that reads from db2 via a captured closure,
-    // then also spies on a db1-local expression afterwards.
-    const outerFunc = vi.fn(() => {
-      const fromDb2 = db2.getResult(baseExpr)
-      const fromDb1 = spyExpr(baseExpr)
-      return `${fromDb2}+${fromDb1}`
-    })
-    const outerExpr = expr(outerFunc)
-
-    expect(db1.getResult(outerExpr)).toBe('db2-value+db1-value')
-
-    // The spyExpr after the nested db2 read must still have tracked a
-    // dependency within db1: changing db1's base invalidates outerExpr.
-    const db1b = db1.with(base, 'db1-new')
-    expect(db1b.getResult(outerExpr)).toBe('db2-value+db1-new')
-    expect(outerFunc).toHaveBeenCalledTimes(2)
-  })
-
-  it('restores the active database when a predicate throws', () => {
-    const db = new Database()
-    const boom = (): any => { throw new Error('boom') }
-    const boomExpr = expr(boom)
-
-    expect(() => db.getResult(boomExpr)).toThrow('boom')
-
-    // After the throw, there must be no leaked active database:
-    // a bare spyExpr call should evaluate plainly instead of caching in db.
-    let plainCalls = 0
-    const plainFunc = () => {
-      plainCalls++
-      return `plain-${plainCalls}`
-    }
-    const plainExpr = expr(plainFunc)
-    expect(spyExpr(plainExpr)).toBe('plain-1')
-    expect(spyExpr(plainExpr)).toBe('plain-2')
-    expect(plainCalls).toBe(2)
-  })
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
 import { expr } from './expression';
-import { spyExpr } from './database';
+import { spyExpr } from './spy';
 import { Atom, value } from './atom';
 
 describe('DatabaseReactor', () => {

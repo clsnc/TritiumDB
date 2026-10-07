@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, spyExpr } from './database'
+import { Database } from './database'
+import { spyExpr } from './spy'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 

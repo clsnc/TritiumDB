@@ -18,7 +18,7 @@ class ExpressionResult {
     constructor(readonly value: Value | Error, readonly isReturnValue: boolean) {}
 }
 
-let activeDatabase: Database | null = null
+export let activeDatabase: Database | null = null
 
 export class Database {
     protected currentlyComputingExprs: ImmSet<Expression>
@@ -230,14 +230,4 @@ export class Database {
         const nextValue = modifier(this.getResult(expr(value, atom)))
         return this.withGetAffectedRels(atom, nextValue)
     }
-}
-
-export function spyExpr<A extends any[], R>(expr: Expression<A, R>): R {
-    // Outside of a computation there is no database to track dependencies in,
-    // so just evaluate the predicate directly.
-    if (activeDatabase === null) {
-        return expr.pred(...expr.args)
-    }
-
-    return activeDatabase.recordDependencyAndResolve(expr)
 }
