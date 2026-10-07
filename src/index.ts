@@ -1,4 +1,4 @@
-export { Database, spy } from './database'
+export { Database, spyExpr } from './database'
 export { Expression, expr } from './expression'
 export { Reactor } from './reactor'
 export { Atom, value } from './atom'

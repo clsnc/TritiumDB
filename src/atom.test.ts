@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, spy } from './database'
+import { Database, spyExpr } from './database'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
@@ -11,10 +11,10 @@ describe('Atom', () => {
     expect(db.getResult(expr(value, v))).toBe('anonymous')
   })
 
-  it('returns the default value via spy outside a computation', () => {
+  it('returns the default value via spyExpr outside a computation', () => {
     const v = new Atom('anonymous')
 
-    expect(spy(expr(value, v))).toBe('anonymous')
+    expect(spyExpr(expr(value, v))).toBe('anonymous')
   })
 
   it('returns the overridden value in the derived database only', () => {
@@ -45,7 +45,7 @@ describe('Atom', () => {
     const db = new Database()
     const v = new Atom('anonymous')
     const atomExpr = expr(value, v)
-    const greetFunc = vi.fn(() => `hi ${spy(atomExpr)}`)
+    const greetFunc = vi.fn(() => `hi ${spyExpr(atomExpr)}`)
     const greeting = expr(greetFunc)
 
     expect(db.getResult(greeting)).toBe('hi anonymous')
@@ -63,7 +63,7 @@ describe('Atom', () => {
     const db = new Database()
     const first = new Atom('x')
     const second = new Atom(1)
-    const combined = expr(() => `${spy(expr(value, first))}-${spy(expr(value, second))}`)
+    const combined = expr(() => `${spyExpr(expr(value, first))}-${spyExpr(expr(value, second))}`)
 
     expect(db.getResult(combined)).toBe('x-1')
 

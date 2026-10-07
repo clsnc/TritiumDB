@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database, RecursiveExpressionComputationError, spy } from './database'
+import { Database, RecursiveExpressionComputationError, spyExpr } from './database'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
@@ -28,7 +28,7 @@ describe('ReactiveDatabase', () => {
       recursiveCallCount++
       if (recursiveCallCount === 1) {
         // First call, trigger recursion
-        return spy(expr(recursiveFunc, arg))
+        return spyExpr(expr(recursiveFunc, arg))
       }
       return 'result'
     }
@@ -84,7 +84,7 @@ describe('ReactiveDatabase', () => {
 
     // Create a dependent expression that uses the base
     const dependentFunc = () => {
-      const baseValue = spy(baseExpr)
+      const baseValue = spyExpr(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -103,7 +103,7 @@ describe('ReactiveDatabase', () => {
 
     // Create dependent expression
     const dependentFunc = () => {
-      const baseValue = spy(baseExpr)
+      const baseValue = spyExpr(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -134,16 +134,16 @@ describe('ReactiveDatabase', () => {
 
     // Dependent expressions
     const func1 = () => {
-      const val1 = spy(base1)
+      const val1 = spyExpr(base1)
       return `func1-${val1}`
     }
     const func2 = () => {
-      const val2 = spy(base2)
+      const val2 = spyExpr(base2)
       return `func2-${val2}`
     }
     const func3 = () => {
-      const val1 = spy(expr(func1))
-      const val2 = spy(expr(func2))
+      const val1 = spyExpr(expr(func1))
+      const val2 = spyExpr(expr(func2))
       return `func3-${val1}-${val2}`
     }
 
@@ -218,13 +218,13 @@ describe('ReactiveDatabase', () => {
     const counter = new Atom(0)
     const baseExpr = expr(value, counter)
     const doubleFunc = () => {
-      const count = spy(baseExpr) || 0
+      const count = spyExpr(baseExpr) || 0
       return count * 2
     }
     const doubleExpr = expr(doubleFunc)
 
     const quadrupleFunc = () => {
-      const doubled = spy(doubleExpr)
+      const doubled = spyExpr(doubleExpr)
       return doubled * 2
     }
     const quadrupleExpr = expr(quadrupleFunc)
@@ -287,7 +287,7 @@ describe('ReactiveDatabase', () => {
 
     // Create dependent expression
     const dependentFunc = () => {
-      const baseValue = spy(baseExpr)
+      const baseValue = spyExpr(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -327,7 +327,7 @@ describe('ReactiveDatabase', () => {
 
     // Create dependent expression
     const dependentFunc = () => {
-      const baseValue = spy(baseExpr)
+      const baseValue = spyExpr(baseExpr)
       return `dependent-${baseValue}`
     }
     const dependentExpr = expr(dependentFunc)
@@ -397,7 +397,7 @@ describe('ReactiveDatabase', () => {
     const base = new Atom<string | undefined>(undefined)
     const baseExpr = expr(value, base)
     const throwingFunc = vi.fn(() => {
-      const value = spy(baseExpr)
+      const value = spyExpr(baseExpr)
       if (value === 'bad') {
         throw new Error('bad')
       }
@@ -436,7 +436,7 @@ describe('ReactiveDatabase', () => {
     const baseExpr = expr(value, base)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
-      const value = spy(baseExpr)
+      const value = spyExpr(baseExpr)
       if (value === 'bad') {
         throw innerError
       }
@@ -444,7 +444,7 @@ describe('ReactiveDatabase', () => {
     })
     const outerFunc = vi.fn(() => {
       try {
-        return `outer-${spy(expr(innerFunc))}`
+        return `outer-${spyExpr(expr(innerFunc))}`
       } catch (err) {
         return 'outer-fallback'
       }
@@ -464,13 +464,13 @@ describe('ReactiveDatabase', () => {
     const baseExpr = expr(value, base)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
-      const value = spy(baseExpr)
+      const value = spyExpr(baseExpr)
       if (value === 'bad') {
         throw innerError
       }
       return `inner-${value}`
     })
-    const outerFunc = vi.fn(() => `outer-${spy(expr(innerFunc))}`)
+    const outerFunc = vi.fn(() => `outer-${spyExpr(expr(innerFunc))}`)
 
     let db = rdb.with(base, 'bad')
     let caughtError
@@ -496,7 +496,7 @@ describe('ReactiveDatabase', () => {
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 
-  it('spy outside a computation evaluates the predicate directly without caching', () => {
+  it('spyExpr outside a computation evaluates the predicate directly without caching', () => {
     let callCount = 0
     const func = vi.fn((arg: string) => {
       callCount++
@@ -504,9 +504,9 @@ describe('ReactiveDatabase', () => {
     })
     const e = expr(func, 'test')
 
-    // No active database, so each spy call re-evaluates
-    expect(spy(e)).toBe('computed-test-1')
-    expect(spy(e)).toBe('computed-test-2')
+    // No active database, so each spyExpr call re-evaluates
+    expect(spyExpr(e)).toBe('computed-test-1')
+    expect(spyExpr(e)).toBe('computed-test-2')
     expect(func).toHaveBeenCalledTimes(2)
     expect(func).toHaveBeenCalledWith('test')
   })
@@ -521,14 +521,14 @@ describe('ReactiveDatabase', () => {
     // then also spies on a db1-local expression afterwards.
     const outerFunc = vi.fn(() => {
       const fromDb2 = db2.getResult(baseExpr)
-      const fromDb1 = spy(baseExpr)
+      const fromDb1 = spyExpr(baseExpr)
       return `${fromDb2}+${fromDb1}`
     })
     const outerExpr = expr(outerFunc)
 
     expect(db1.getResult(outerExpr)).toBe('db2-value+db1-value')
 
-    // The spy after the nested db2 read must still have tracked a
+    // The spyExpr after the nested db2 read must still have tracked a
     // dependency within db1: changing db1's base invalidates outerExpr.
     const db1b = db1.with(base, 'db1-new')
     expect(db1b.getResult(outerExpr)).toBe('db2-value+db1-new')
@@ -543,15 +543,15 @@ describe('ReactiveDatabase', () => {
     expect(() => db.getResult(boomExpr)).toThrow('boom')
 
     // After the throw, there must be no leaked active database:
-    // a bare spy call should evaluate plainly instead of caching in db.
+    // a bare spyExpr call should evaluate plainly instead of caching in db.
     let plainCalls = 0
     const plainFunc = () => {
       plainCalls++
       return `plain-${plainCalls}`
     }
     const plainExpr = expr(plainFunc)
-    expect(spy(plainExpr)).toBe('plain-1')
-    expect(spy(plainExpr)).toBe('plain-2')
+    expect(spyExpr(plainExpr)).toBe('plain-1')
+    expect(spyExpr(plainExpr)).toBe('plain-2')
     expect(plainCalls).toBe(2)
   })
 })

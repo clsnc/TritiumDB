@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
 import { expr } from './expression';
-import { spy } from './database';
+import { spyExpr } from './database';
 import { Atom, value } from './atom';
 
 describe('DatabaseReactor', () => {
@@ -67,7 +67,7 @@ describe('DatabaseReactor', () => {
     it('handles dependent expression notifications: notifies on change, skips duplicates without recompute, resumes after recompute', () => {
         const reactor = new Reactor();
         const base = new Atom(0);
-        const depFunc = (_arg: string) => spy(expr(value, base)) + 1;
+        const depFunc = (_arg: string) => spyExpr(expr(value, base)) + 1;
         // Set up base value and create dependency
         reactor.set(base, 10);
         expect(reactor.getResult(expr(depFunc, 'key'))).toBe(11);
@@ -94,7 +94,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const base = new Atom(0);
         const callback = vi.fn();
-        const depFunc = (_arg: string) => spy(expr(value, base)) + 1;
+        const depFunc = (_arg: string) => spyExpr(expr(value, base)) + 1;
 
         reactor.set(base, 10);
         reactor.subscribe(expr(depFunc, 'key'), callback);

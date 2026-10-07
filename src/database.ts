@@ -141,7 +141,7 @@ export class Database {
         return affectedExprs
     }
 
-    /** @internal Only called by module-level `spy`; requires this to already be the active database. */
+    /** @internal Only called by module-level `spyExpr`; requires this to already be the active database. */
     recordDependencyAndResolve<A extends any[], R>(expr: Expression<A, R>): R {
         /* If there is a currently computing expression, then that expression must depend on the one
            whose result is being requested. So that dependency should be recorded. */
@@ -232,7 +232,7 @@ export class Database {
     }
 }
 
-export function spy<A extends any[], R>(expr: Expression<A, R>): R {
+export function spyExpr<A extends any[], R>(expr: Expression<A, R>): R {
     // Outside of a computation there is no database to track dependencies in,
     // so just evaluate the predicate directly.
     if (activeDatabase === null) {
