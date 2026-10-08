@@ -5,11 +5,11 @@ import { spy } from './spy';
 import { Atom, value } from './atom';
 
 describe('DatabaseReactor', () => {
-    it('getExprResult returns set value', () => {
+    it('evalExpr returns set value', () => {
         const reactor = new Reactor();
         const atom = new Atom('');
         reactor.set(atom, 'result');
-        const res = reactor.getExprResult(expr(value, atom));
+        const res = reactor.evalExpr(expr(value, atom));
         expect(res).toBe('result');
     });
 
@@ -19,15 +19,15 @@ describe('DatabaseReactor', () => {
         expect(reactor.eval(() => 'result')).toBe('result');
     });
 
-    it('eval delegates to getExprResult and shares its cache', () => {
+    it('eval delegates to evalExpr and shares its cache', () => {
         const reactor = new Reactor();
         const func = vi.fn((label: string, count: number) => `${label}-${count}`);
-        const getExprResult = vi.spyOn(reactor, 'getExprResult');
+        const evalExpr = vi.spyOn(reactor, 'evalExpr');
 
         const result: string = reactor.eval(func, 'test', 2);
         expect(result).toBe('test-2');
-        expect(getExprResult).toHaveBeenCalledWith(expr(func, 'test', 2));
-        expect(reactor.getExprResult(expr(func, 'test', 2))).toBe(result);
+        expect(evalExpr).toHaveBeenCalledWith(expr(func, 'test', 2));
+        expect(reactor.evalExpr(expr(func, 'test', 2))).toBe(result);
         expect(reactor.eval(func, 'test', 2)).toBe(result);
         expect(func).toHaveBeenCalledExactlyOnceWith('test', 2);
     });

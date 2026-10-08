@@ -21,7 +21,7 @@ export class Reactor {
 
     subscribe<A extends any[], R>(expr: Expression<A, R>, callback: () => void): () => void {
         // Get the result. The result won't be used, but it any dependencies to be established for expressions with function predicates.
-        this.db.getExprResult(expr)
+        this.db.evalExpr(expr)
 
         // Get or create the callbacks Set
         let exprCallbacks = this.subscribers.get(expr);
@@ -48,12 +48,12 @@ export class Reactor {
         };
     }
 
-    getExprResult<A extends any[], R>(expr: Expression<A, R>): R {
-        return this.db.getExprResult(expr);
+    evalExpr<A extends any[], R>(expr: Expression<A, R>): R {
+        return this.db.evalExpr(expr);
     }
 
     eval<A extends any[], R>(pred: (...args: A) => R, ...args: A): R {
-        return this.getExprResult(expr(pred, ...args));
+        return this.evalExpr(expr(pred, ...args));
     }
 
     // TODO: Add testing for this

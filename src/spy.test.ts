@@ -29,7 +29,7 @@ describe('spyExpr', () => {
     // A predicate on db1 that reads from db2 via a captured closure,
     // then also spies on a db1-local expression afterwards.
     const outerFunc = vi.fn(() => {
-      const fromDb2 = db2.getExprResult(baseExpr)
+      const fromDb2 = db2.evalExpr(baseExpr)
       const fromDb1 = spyExpr(baseExpr)
       return `${fromDb2}+${fromDb1}`
     })

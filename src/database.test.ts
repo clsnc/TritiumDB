@@ -17,15 +17,15 @@ describe('ReactiveDatabase', () => {
     expect(db.eval(() => 'result')).toBe('result')
   })
 
-  it('eval delegates to getExprResult and shares its cache', () => {
+  it('eval delegates to evalExpr and shares its cache', () => {
     const db = new Database()
     const func = vi.fn((label: string, count: number) => `${label}-${count}`)
-    const getExprResult = vi.spyOn(db, 'getExprResult')
+    const evalExpr = vi.spyOn(db, 'evalExpr')
 
     const result: string = db.eval(func, 'test', 2)
     expect(result).toBe('test-2')
-    expect(getExprResult).toHaveBeenCalledWith(expr(func, 'test', 2))
-    expect(db.getExprResult(expr(func, 'test', 2))).toBe(result)
+    expect(evalExpr).toHaveBeenCalledWith(expr(func, 'test', 2))
+    expect(db.evalExpr(expr(func, 'test', 2))).toBe(result)
     expect(db.eval(func, 'test', 2)).toBe(result)
     expect(func).toHaveBeenCalledExactlyOnceWith('test', 2)
   })
@@ -57,7 +57,7 @@ describe('ReactiveDatabase', () => {
     const func = vi.fn((arg) => `computed-${arg}`)
     const e = expr(func, 'test-arg')
 
-    const result = rdb.getExprResult(e)
+    const result = rdb.evalExpr(e)
     expect(result).toBe('computed-test-arg')
     expect(func).toHaveBeenCalledWith('test-arg')
   })
@@ -79,7 +79,7 @@ describe('ReactiveDatabase', () => {
 
     let thrown
     try {
-      rdb.getExprResult(recursiveExpr)
+      rdb.evalExpr(recursiveExpr)
     } catch (err) {
       thrown = err
     }
@@ -112,7 +112,7 @@ describe('ReactiveDatabase', () => {
 
     expect(newDb).toBeInstanceOf(Database)
     expect(affectedExprs.has(e)).toBe(true)
-    expect(newDb.getExprResult(e)).toBe(result)
+    expect(newDb.evalExpr(e)).toBe(result)
   })
 
   it('allows values to depend on other values', () => {
@@ -215,7 +215,7 @@ describe('ReactiveDatabase', () => {
     const func = vi.fn((arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
     const e = expr(func, 'a', 'b', 'c')
 
-    const result = rdb.getExprResult(e)
+    const result = rdb.evalExpr(e)
     expect(result).toBe('a-b-c')
     expect(func).toHaveBeenCalledWith('a', 'b', 'c')
   })
@@ -231,12 +231,12 @@ describe('ReactiveDatabase', () => {
     const e = expr(func, 'test')
 
     // First call should compute
-    const result1 = rdb.getExprResult(e)
+    const result1 = rdb.evalExpr(e)
     expect(result1).toBe('computed-test-1')
     expect(callCount).toBe(1)
 
     // Second call should use cache
-    const result2 = rdb.getExprResult(e)
+    const result2 = rdb.evalExpr(e)
     expect(result2).toBe('computed-test-1') // Same result as first call
     expect(callCount).toBe(1) // Function not called again
   })
@@ -259,12 +259,12 @@ describe('ReactiveDatabase', () => {
 
     // Initial state
     let db = rdb.with(counter, 5)
-    expect(db.getExprResult(doubleExpr)).toBe(10)
+    expect(db.evalExpr(doubleExpr)).toBe(10)
     expect(db.eval(quadrupleFunc)).toBe(20)
 
     // Update base value
     db = db.with(counter, 10)
-    expect(db.getExprResult(doubleExpr)).toBe(20)
+    expect(db.evalExpr(doubleExpr)).toBe(20)
     expect(db.eval(quadrupleFunc)).toBe(40)
   })
 
@@ -301,7 +301,7 @@ describe('ReactiveDatabase', () => {
 
     expect(db2).toBeInstanceOf(Database)
     expect(affectedExprs.has(e)).toBe(true)
-    expect(db2.getExprResult(e)).toBe('modified-initial-value')
+    expect(db2.evalExpr(e)).toBe('modified-initial-value')
   })
 
   it('withModified invalidates dependent expressions', () => {
@@ -357,7 +357,7 @@ describe('ReactiveDatabase', () => {
     const dependentExpr = expr(dependentFunc)
 
     // Compute dependent to establish dependency
-    db1.getExprResult(dependentExpr)
+    db1.evalExpr(dependentExpr)
 
     // Modify base atom value and get affected expressions
     const modifier = (oldVal: string | undefined) => `${oldVal}-modified`
@@ -397,14 +397,14 @@ describe('ReactiveDatabase', () => {
 
     let firstError
     try {
-      db.getExprResult(e)
+      db.evalExpr(e)
     } catch (err) {
       firstError = err
     }
 
     let secondError
     try {
-      db.getExprResult(e)
+      db.evalExpr(e)
     } catch (err) {
       secondError = err
     }
