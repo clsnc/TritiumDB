@@ -95,6 +95,10 @@ export class Database {
         return this.setActiveAndResolveResult(expr)
     }
 
+    eval<A extends any[], R>(pred: (...args: A) => R, ...args: A): R {
+        return this.getExprResult(expr(pred, ...args))
+    }
+
     protected setActiveAndResolveResult<A extends any[], R>(expr: Expression<A, R>): R {
         const prevActiveDatabase = activeDatabase
         activeDatabase = this

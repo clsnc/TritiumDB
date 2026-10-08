@@ -11,6 +11,47 @@ describe('ReactiveDatabase', () => {
     expect(rdb).toBeInstanceOf(Database)
   })
 
+  it('eval accepts a function with no arguments', () => {
+    const db = new Database()
+
+    expect(db.eval(() => 'result')).toBe('result')
+  })
+
+  it('eval delegates to getExprResult and shares its cache', () => {
+    const db = new Database()
+    const func = vi.fn((label: string, count: number) => `${label}-${count}`)
+    const getExprResult = vi.spyOn(db, 'getExprResult')
+
+    const result: string = db.eval(func, 'test', 2)
+    expect(result).toBe('test-2')
+    expect(getExprResult).toHaveBeenCalledWith(expr(func, 'test', 2))
+    expect(db.getExprResult(expr(func, 'test', 2))).toBe(result)
+    expect(db.eval(func, 'test', 2)).toBe(result)
+    expect(func).toHaveBeenCalledExactlyOnceWith('test', 2)
+  })
+
+  it('eval tracks dependencies and recomputes in a derived database', () => {
+    const base = new Atom(1)
+    const db = new Database()
+    const func = vi.fn((factor: number) => spy(value, base) * factor)
+
+    expect(db.eval(func, 3)).toBe(3)
+    const db2 = db.with(base, 2)
+    expect(db2.eval(func, 3)).toBe(6)
+    expect(db.eval(func, 3)).toBe(3)
+    expect(func).toHaveBeenCalledTimes(2)
+  })
+
+  it('eval propagates and caches errors', () => {
+    const db = new Database()
+    const error = new Error('boom')
+    const func = vi.fn(() => { throw error })
+
+    expect(() => db.eval(func)).toThrow(error)
+    expect(() => db.eval(func)).toThrow(error)
+    expect(func).toHaveBeenCalledTimes(1)
+  })
+
   it('computes result for function predicates', () => {
     const rdb = new Database()
     const func = vi.fn((arg) => `computed-${arg}`)

@@ -13,6 +13,46 @@ describe('DatabaseReactor', () => {
         expect(res).toBe('result');
     });
 
+    it('eval accepts a function with no arguments', () => {
+        const reactor = new Reactor();
+
+        expect(reactor.eval(() => 'result')).toBe('result');
+    });
+
+    it('eval delegates to getExprResult and shares its cache', () => {
+        const reactor = new Reactor();
+        const func = vi.fn((label: string, count: number) => `${label}-${count}`);
+        const getExprResult = vi.spyOn(reactor, 'getExprResult');
+
+        const result: string = reactor.eval(func, 'test', 2);
+        expect(result).toBe('test-2');
+        expect(getExprResult).toHaveBeenCalledWith(expr(func, 'test', 2));
+        expect(reactor.getExprResult(expr(func, 'test', 2))).toBe(result);
+        expect(reactor.eval(func, 'test', 2)).toBe(result);
+        expect(func).toHaveBeenCalledExactlyOnceWith('test', 2);
+    });
+
+    it('eval tracks dependencies and recomputes after set', () => {
+        const reactor = new Reactor();
+        const base = new Atom(1);
+        const func = vi.fn((factor: number) => spy(value, base) * factor);
+
+        expect(reactor.eval(func, 3)).toBe(3);
+        reactor.set(base, 2);
+        expect(reactor.eval(func, 3)).toBe(6);
+        expect(func).toHaveBeenCalledTimes(2);
+    });
+
+    it('eval propagates and caches errors', () => {
+        const reactor = new Reactor();
+        const error = new Error('boom');
+        const func = vi.fn(() => { throw error });
+
+        expect(() => reactor.eval(func)).toThrow(error);
+        expect(() => reactor.eval(func)).toThrow(error);
+        expect(func).toHaveBeenCalledTimes(1);
+    });
+
     it('set notifies subscribers for affected expression', () => {
         const reactor = new Reactor();
         const atom = new Atom('');

@@ -1,6 +1,6 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database } from './database';
-import { Expression } from './expression';
+import { Expression, expr } from './expression';
 import { Atom } from './atom';
 
 export class Reactor {
@@ -50,6 +50,10 @@ export class Reactor {
 
     getExprResult<A extends any[], R>(expr: Expression<A, R>): R {
         return this.db.getExprResult(expr);
+    }
+
+    eval<A extends any[], R>(pred: (...args: A) => R, ...args: A): R {
+        return this.getExprResult(expr(pred, ...args));
     }
 
     // TODO: Add testing for this
