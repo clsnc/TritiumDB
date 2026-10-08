@@ -98,7 +98,7 @@ console.log(reactor.eval(value, clickCountAtom)) // Output: 11
 console.log(reactor.eval(tripleClicks)) // Output: 33
 ```
 
-Sometimes we want to take an action when some part of the application state changes. `Reactor.subscribe` lets us subscribe to be notified when a function call's return value may have changed. It returns a function that can be used to unsubscribe at any time. To trigger notifications to be sent out, `Reactor.flushNotifications` must be called.
+Sometimes we want to take an action when some part of the application state changes. `Reactor.watchExpr` lets us subscribe to be notified when a function call's return value may have changed. It returns a function that can be used to unsubscribe at any time. To trigger notifications to be sent out, `Reactor.flushNotifications` must be called.
 
 ```js
 import { expr } from 'tritiumdb'
@@ -107,7 +107,7 @@ function handle20xClicksChange() {
   console.log(`Changed to ${reactor.eval(multiplyClicks, 20)}`)
 }
 
-const unsubscribe = reactor.subscribe(handle20xClicksChange, expr(multiplyClicks, 20)) // Subscribe to changes to the result of multiplyClicks(20)
+const unsubscribe = reactor.watchExpr(handle20xClicksChange, expr(multiplyClicks, 20)) // Subscribe to changes to the result of multiplyClicks(20)
 
 reactor.set(clickCountAtom, 15)
 reactor.flushNotifications() // Output: "Changed to 300"
