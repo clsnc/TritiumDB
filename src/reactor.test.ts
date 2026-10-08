@@ -110,7 +110,7 @@ describe('DatabaseReactor', () => {
         const depFunc = (_arg: string) => spy(value, base) + 1;
         // Set up base value and create dependency
         reactor.set(base, 10);
-        expect(reactor.getExprResult(expr(depFunc, 'key'))).toBe(11);
+        expect(reactor.eval(depFunc, 'key')).toBe(11);
         // Subscribe to dependent expression
         const callback = vi.fn();
         reactor.subscribe(expr(depFunc, 'key'), callback);
@@ -123,7 +123,7 @@ describe('DatabaseReactor', () => {
         reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
         // Recompute dependent
-        expect(reactor.getExprResult(expr(depFunc, 'key'))).toBe(31);
+        expect(reactor.eval(depFunc, 'key')).toBe(31);
         // Third change after recompute: should notify again
         reactor.set(base, 40);
         reactor.flushNotifications();

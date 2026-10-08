@@ -231,7 +231,7 @@ export class Database {
 
     withModifiedGetAffectedRels<T>(atom: Atom<T>, modifier: (oldValue: T) => T): [Database, ImmSet<Expression>] {
         // The new value is the old value with the modifier function applied to it
-        const nextValue = modifier(this.getExprResult(expr(value, atom)))
+        const nextValue = modifier(this.eval(value, atom))
         return this.withGetAffectedRels(atom, nextValue)
     }
 }
