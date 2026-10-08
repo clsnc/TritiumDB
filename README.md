@@ -120,14 +120,14 @@ reactor.flushNotifications() // No output
 
 ## React
 
-In React, the `useResult` hook subscribes an element to a function call result within a Reactor. Here is a button that increases the click count. Each time it is clicked, `clickCountAtom`'s value is incremented in `reactor`. React is then notified about the possible changes to the results of `value(clickCountAtom)` and `multiplyClicks(4)` so it knows to rerender the `ClickCounter` button.
+In React, the `useEvalExpr` hook subscribes an element to a function call result within a Reactor. Here is a button that increases the click count. Each time it is clicked, `clickCountAtom`'s value is incremented in `reactor`. React is then notified about the possible changes to the results of `value(clickCountAtom)` and `multiplyClicks(4)` so it knows to rerender the `ClickCounter` button.
 
 ```jsx
-import { useResult } from 'tritiumdb'
+import { useEvalExpr } from 'tritiumdb'
 
 function ClickCounter() {
-  const numClicks = useResult(reactor, expr(value, clickCountAtom))
-  const quadrupleNumClicks = useResult(reactor, expr(multiplyClicks, 4))
+  const numClicks = useEvalExpr(reactor, expr(value, clickCountAtom))
+  const quadrupleNumClicks = useEvalExpr(reactor, expr(multiplyClicks, 4))
 
   return (
     <button onClick={() => {
