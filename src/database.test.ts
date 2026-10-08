@@ -16,7 +16,7 @@ describe('ReactiveDatabase', () => {
     const func = vi.fn((arg) => `computed-${arg}`)
     const e = expr(func, 'test-arg')
 
-    const result = rdb.getResult(e)
+    const result = rdb.getExprResult(e)
     expect(result).toBe('computed-test-arg')
     expect(func).toHaveBeenCalledWith('test-arg')
   })
@@ -38,7 +38,7 @@ describe('ReactiveDatabase', () => {
 
     let thrown
     try {
-      rdb.getResult(recursiveExpr)
+      rdb.getExprResult(recursiveExpr)
     } catch (err) {
       thrown = err
     }
@@ -58,8 +58,8 @@ describe('ReactiveDatabase', () => {
 
     expect(newDb).toBeInstanceOf(Database)
     expect(newDb).not.toBe(rdb) // Should be a new instance
-    expect(newDb.getResult(e)).toBe(result)
-    expect(rdb.getResult(e)).toBeUndefined() // Original unchanged
+    expect(newDb.getExprResult(e)).toBe(result)
+    expect(rdb.getExprResult(e)).toBeUndefined() // Original unchanged
   })
 
   it('returns affected expressions with withGetAffectedRels()', () => {
@@ -72,7 +72,7 @@ describe('ReactiveDatabase', () => {
 
     expect(newDb).toBeInstanceOf(Database)
     expect(affectedExprs.has(e)).toBe(true)
-    expect(newDb.getResult(e)).toBe(result)
+    expect(newDb.getExprResult(e)).toBe(result)
   })
 
   it('allows values to depend on other values', () => {
@@ -89,7 +89,7 @@ describe('ReactiveDatabase', () => {
     }
     const dependentExpr = expr(dependentFunc)
 
-    const result = db1.getResult(dependentExpr)
+    const result = db1.getExprResult(dependentExpr)
     expect(result).toBe('dependent-base-value')
   })
 
@@ -108,14 +108,14 @@ describe('ReactiveDatabase', () => {
     const dependentExpr = expr(dependentFunc)
 
     // Compute dependent result
-    const result1 = db1.getResult(dependentExpr)
+    const result1 = db1.getExprResult(dependentExpr)
     expect(result1).toBe('dependent-value1')
 
     // Update base atom
     const db2 = db1.with(base, 'value2')
 
     // Dependent should be recomputed with new base value
-    const result2 = db2.getResult(dependentExpr)
+    const result2 = db2.getExprResult(dependentExpr)
     expect(result2).toBe('dependent-value2')
   })
 
@@ -149,15 +149,15 @@ describe('ReactiveDatabase', () => {
     const dependent3 = expr(func3)
 
     // Test initial computation
-    expect(db.getResult(dependent1)).toBe('func1-value1')
-    expect(db.getResult(dependent2)).toBe('func2-value2')
-    expect(db.getResult(dependent3)).toBe('func3-func1-value1-func2-value2')
+    expect(db.getExprResult(dependent1)).toBe('func1-value1')
+    expect(db.getExprResult(dependent2)).toBe('func2-value2')
+    expect(db.getExprResult(dependent3)).toBe('func3-func1-value1-func2-value2')
 
     // Update base1 and check propagation
     db = db.with(atom1, 'new-value1')
-    expect(db.getResult(dependent1)).toBe('func1-new-value1')
-    expect(db.getResult(dependent2)).toBe('func2-value2') // Should be unchanged
-    expect(db.getResult(dependent3)).toBe('func3-func1-new-value1-func2-value2')
+    expect(db.getExprResult(dependent1)).toBe('func1-new-value1')
+    expect(db.getExprResult(dependent2)).toBe('func2-value2') // Should be unchanged
+    expect(db.getExprResult(dependent3)).toBe('func3-func1-new-value1-func2-value2')
   })
 
   it('maintains immutability when creating new instances', () => {
@@ -169,12 +169,12 @@ describe('ReactiveDatabase', () => {
     const db2 = db1.with(atom, 'value2')
 
     // Each database should have its own state
-    expect(rdb.getResult(e)).toBeUndefined()
-    expect(db1.getResult(e)).toBe('value1')
-    expect(db2.getResult(e)).toBe('value2')
+    expect(rdb.getExprResult(e)).toBeUndefined()
+    expect(db1.getExprResult(e)).toBe('value1')
+    expect(db2.getExprResult(e)).toBe('value2')
 
     // Original databases should be unchanged
-    expect(db1.getResult(e)).toBe('value1')
+    expect(db1.getExprResult(e)).toBe('value1')
   })
 
   it('handles function expressions with multiple arguments', () => {
@@ -182,7 +182,7 @@ describe('ReactiveDatabase', () => {
     const func = vi.fn((arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
     const e = expr(func, 'a', 'b', 'c')
 
-    const result = rdb.getResult(e)
+    const result = rdb.getExprResult(e)
     expect(result).toBe('a-b-c')
     expect(func).toHaveBeenCalledWith('a', 'b', 'c')
   })
@@ -198,12 +198,12 @@ describe('ReactiveDatabase', () => {
     const e = expr(func, 'test')
 
     // First call should compute
-    const result1 = rdb.getResult(e)
+    const result1 = rdb.getExprResult(e)
     expect(result1).toBe('computed-test-1')
     expect(callCount).toBe(1)
 
     // Second call should use cache
-    const result2 = rdb.getResult(e)
+    const result2 = rdb.getExprResult(e)
     expect(result2).toBe('computed-test-1') // Same result as first call
     expect(callCount).toBe(1) // Function not called again
   })
@@ -227,13 +227,13 @@ describe('ReactiveDatabase', () => {
 
     // Initial state
     let db = rdb.with(counter, 5)
-    expect(db.getResult(doubleExpr)).toBe(10)
-    expect(db.getResult(quadrupleExpr)).toBe(20)
+    expect(db.getExprResult(doubleExpr)).toBe(10)
+    expect(db.getExprResult(quadrupleExpr)).toBe(20)
 
     // Update base value
     db = db.with(counter, 10)
-    expect(db.getResult(doubleExpr)).toBe(20)
-    expect(db.getResult(quadrupleExpr)).toBe(40)
+    expect(db.getExprResult(doubleExpr)).toBe(20)
+    expect(db.getExprResult(quadrupleExpr)).toBe(40)
   })
 
   it('withModified creates new database with modified atom value', () => {
@@ -251,8 +251,8 @@ describe('ReactiveDatabase', () => {
 
     expect(db2).toBeInstanceOf(Database)
     expect(db2).not.toBe(db1) // Should be a new instance
-    expect(db1.getResult(e)).toBe(initialResult) // Original unchanged
-    expect(db2.getResult(e)).toBe('modified-initial-value') // Modified in new db
+    expect(db1.getExprResult(e)).toBe(initialResult) // Original unchanged
+    expect(db2.getExprResult(e)).toBe('modified-initial-value') // Modified in new db
   })
 
   it('withModifiedGetAffectedRels returns affected expressions', () => {
@@ -270,7 +270,7 @@ describe('ReactiveDatabase', () => {
 
     expect(db2).toBeInstanceOf(Database)
     expect(affectedExprs.has(e)).toBe(true)
-    expect(db2.getResult(e)).toBe('modified-initial-value')
+    expect(db2.getExprResult(e)).toBe('modified-initial-value')
   })
 
   it('withModified invalidates dependent expressions', () => {
@@ -288,7 +288,7 @@ describe('ReactiveDatabase', () => {
     const dependentExpr = expr(dependentFunc)
 
     // Compute dependent result
-    const result1 = db1.getResult(dependentExpr)
+    const result1 = db1.getExprResult(dependentExpr)
     expect(result1).toBe('dependent-original')
 
     // Modify base atom using withModified
@@ -296,7 +296,7 @@ describe('ReactiveDatabase', () => {
     const db2 = db1.withModified(base, modifier)
 
     // Dependent should be recomputed with new base value
-    const result2 = db2.getResult(dependentExpr)
+    const result2 = db2.getExprResult(dependentExpr)
     expect(result2).toBe('dependent-original-modified')
   })
 
@@ -309,7 +309,7 @@ describe('ReactiveDatabase', () => {
     const modifier = (oldVal: string | undefined) => oldVal === undefined ? 'default-value' : `modified-${oldVal}`
     const db2 = rdb.withModified(atom, modifier)
 
-    expect(db2.getResult(e)).toBe('default-value')
+    expect(db2.getExprResult(e)).toBe('default-value')
   })
 
   it('withModifiedGetAffectedRels includes dependent expressions in affected set', () => {
@@ -328,7 +328,7 @@ describe('ReactiveDatabase', () => {
     const dependentExpr = expr(dependentFunc)
 
     // Compute dependent to establish dependency
-    db1.getResult(dependentExpr)
+    db1.getExprResult(dependentExpr)
 
     // Modify base atom value and get affected expressions
     const modifier = (oldVal: string | undefined) => `${oldVal}-modified`
@@ -349,14 +349,14 @@ describe('ReactiveDatabase', () => {
     const db3 = db2.withModified(counter, val => val - 3)
 
     // Each database should have its own state
-    expect(rdb.getResult(e)).toBe(0)
-    expect(db1.getResult(e)).toBe(1)
-    expect(db2.getResult(e)).toBe(2)
-    expect(db3.getResult(e)).toBe(-1)
+    expect(rdb.getExprResult(e)).toBe(0)
+    expect(db1.getExprResult(e)).toBe(1)
+    expect(db2.getExprResult(e)).toBe(2)
+    expect(db3.getExprResult(e)).toBe(-1)
 
     // Original databases should be unchanged
-    expect(db1.getResult(e)).toBe(1)
-    expect(db2.getResult(e)).toBe(2)
+    expect(db1.getExprResult(e)).toBe(1)
+    expect(db2.getExprResult(e)).toBe(2)
   })
 
   it('caches and rethrows the same error instance', () => {
@@ -369,14 +369,14 @@ describe('ReactiveDatabase', () => {
 
     let firstError
     try {
-      db.getResult(e)
+      db.getExprResult(e)
     } catch (err) {
       firstError = err
     }
 
     let secondError
     try {
-      db.getResult(e)
+      db.getExprResult(e)
     } catch (err) {
       secondError = err
     }
@@ -403,14 +403,14 @@ describe('ReactiveDatabase', () => {
 
     let firstError
     try {
-      db2.getResult(e)
+      db2.getExprResult(e)
     } catch (err) {
       firstError = err
     }
 
     let secondError
     try {
-      db2.getResult(e)
+      db2.getExprResult(e)
     } catch (err) {
       secondError = err
     }
@@ -420,7 +420,7 @@ describe('ReactiveDatabase', () => {
     expect(throwingFunc).toHaveBeenCalledTimes(1)
 
     const db3 = db2.with(base, 'good')
-    expect(db3.getResult(e)).toBe('ok-good')
+    expect(db3.getExprResult(e)).toBe('ok-good')
     expect(throwingFunc).toHaveBeenCalledTimes(2)
   })
 
@@ -444,10 +444,10 @@ describe('ReactiveDatabase', () => {
     })
 
     const db2 = db.with(base, 'good')
-    expect(db2.getResult(expr(outerFunc))).toBe('outer-inner-good')
+    expect(db2.getExprResult(expr(outerFunc))).toBe('outer-inner-good')
 
     const db3 = db2.with(base, 'bad')
-    expect(db3.getResult(expr(outerFunc))).toBe('outer-fallback')
+    expect(db3.getExprResult(expr(outerFunc))).toBe('outer-fallback')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 
@@ -467,7 +467,7 @@ describe('ReactiveDatabase', () => {
     let db = rdb.with(base, 'bad')
     let caughtError
     try {
-      db.getResult(expr(outerFunc))
+      db.getExprResult(expr(outerFunc))
     } catch (err) {
       caughtError = err
     }
@@ -476,7 +476,7 @@ describe('ReactiveDatabase', () => {
 
     let cachedError
     try {
-      db.getResult(expr(outerFunc))
+      db.getExprResult(expr(outerFunc))
     } catch (err) {
       cachedError = err
     }
@@ -484,7 +484,7 @@ describe('ReactiveDatabase', () => {
     expect(cachedError).toBe(innerError)
 
     db = db.with(base, 'good')
-    expect(db.getResult(expr(outerFunc))).toBe('outer-inner-good')
+    expect(db.getExprResult(expr(outerFunc))).toBe('outer-inner-good')
     expect(innerFunc).toHaveBeenCalledTimes(2)
   })
 

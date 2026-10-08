@@ -29,18 +29,18 @@ describe('spyExpr', () => {
     // A predicate on db1 that reads from db2 via a captured closure,
     // then also spies on a db1-local expression afterwards.
     const outerFunc = vi.fn(() => {
-      const fromDb2 = db2.getResult(baseExpr)
+      const fromDb2 = db2.getExprResult(baseExpr)
       const fromDb1 = spyExpr(baseExpr)
       return `${fromDb2}+${fromDb1}`
     })
     const outerExpr = expr(outerFunc)
 
-    expect(db1.getResult(outerExpr)).toBe('db2-value+db1-value')
+    expect(db1.getExprResult(outerExpr)).toBe('db2-value+db1-value')
 
     // The spyExpr after the nested db2 read must still have tracked a
     // dependency within db1: changing db1's base invalidates outerExpr.
     const db1b = db1.with(base, 'db1-new')
-    expect(db1b.getResult(outerExpr)).toBe('db2-value+db1-new')
+    expect(db1b.getExprResult(outerExpr)).toBe('db2-value+db1-new')
     expect(outerFunc).toHaveBeenCalledTimes(2)
   })
 
@@ -49,7 +49,7 @@ describe('spyExpr', () => {
     const boom = (): any => { throw new Error('boom') }
     const boomExpr = expr(boom)
 
-    expect(() => db.getResult(boomExpr)).toThrow('boom')
+    expect(() => db.getExprResult(boomExpr)).toThrow('boom')
 
     // After the throw, there must be no leaked active database:
     // a bare spyExpr call should evaluate plainly instead of caching in db.
@@ -105,8 +105,8 @@ describe('spy', () => {
       spy(func, 3)
     ])
 
-    expect(db.getResult(combined)).toEqual([4, 4, 4, 6])
-    expect(db.getResult(expr(func, 2))).toBe(4)
+    expect(db.getExprResult(combined)).toEqual([4, 4, 4, 6])
+    expect(db.getExprResult(expr(func, 2))).toBe(4)
     expect(func).toHaveBeenCalledTimes(2)
     expect(func).toHaveBeenNthCalledWith(1, 2)
     expect(func).toHaveBeenNthCalledWith(2, 3)

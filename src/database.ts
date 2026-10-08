@@ -91,7 +91,7 @@ export class Database {
         return discoveredExprs.subtract(blockedExprs)
     }
 
-    getResult<A extends any[], R>(expr: Expression<A, R>): R {
+    getExprResult<A extends any[], R>(expr: Expression<A, R>): R {
         return this.setActiveAndResolveResult(expr)
     }
 
@@ -227,7 +227,7 @@ export class Database {
 
     withModifiedGetAffectedRels<T>(atom: Atom<T>, modifier: (oldValue: T) => T): [Database, ImmSet<Expression>] {
         // The new value is the old value with the modifier function applied to it
-        const nextValue = modifier(this.getResult(expr(value, atom)))
+        const nextValue = modifier(this.getExprResult(expr(value, atom)))
         return this.withGetAffectedRels(atom, nextValue)
     }
 }
