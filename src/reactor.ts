@@ -19,6 +19,10 @@ export class Reactor {
         this.invalidatedExprsPendingSubscriberNotifications = this.invalidatedExprsPendingSubscriberNotifications.union(affectedExprs);
     }
 
+    watch<A extends any[], R>(callback: () => void, pred: (...args: A) => R, ...args: A): () => void {
+        return this.watchExpr(callback, expr(pred, ...args));
+    }
+
     watchExpr<A extends any[], R>(callback: () => void, expr: Expression<A, R>): () => void {
         // Get the result. The result won't be used, but it any dependencies to be established for expressions with function predicates.
         this.db.evalExpr(expr)

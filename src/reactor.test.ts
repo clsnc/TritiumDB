@@ -53,6 +53,45 @@ describe('DatabaseReactor', () => {
         expect(func).toHaveBeenCalledTimes(1);
     });
 
+    it('watch accepts a function with no arguments', () => {
+        const reactor = new Reactor();
+        const base = new Atom(1);
+        const callback = vi.fn();
+        const func = () => spy(value, base) + 1;
+
+        reactor.watch(callback, func);
+        expect(callback).not.toHaveBeenCalled();
+        reactor.set(base, 2);
+        reactor.flushNotifications();
+
+        expect(callback).toHaveBeenCalledExactlyOnceWith();
+        expect(reactor.eval(func)).toBe(3);
+    });
+
+    it('watch tracks dependencies, defers notifications, and supports unsubscribing', () => {
+        const reactor = new Reactor();
+        const base = new Atom(1);
+        const other = new Atom(0);
+        const callback = vi.fn();
+        const func = (factor: number) => spy(value, base) * factor;
+        const unsubscribe = reactor.watch(callback, func, 3);
+
+        reactor.set(other, 1);
+        reactor.flushNotifications();
+        expect(callback).not.toHaveBeenCalled();
+
+        reactor.set(base, 2);
+        expect(callback).not.toHaveBeenCalled();
+        reactor.flushNotifications();
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(reactor.eval(func, 3)).toBe(6);
+
+        unsubscribe();
+        reactor.set(base, 3);
+        reactor.flushNotifications();
+        expect(callback).toHaveBeenCalledTimes(1);
+    });
+
     it('set notifies subscribers for affected expression', () => {
         const reactor = new Reactor();
         const atom = new Atom('');
