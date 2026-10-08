@@ -1,3 +1,3 @@
 # AGENTS.md
 
-Read `CONTRIBUTING.md` for development guidance.
+Read `README.md` for an introduction. Read `CONTRIBUTING.md` for development guidance.
