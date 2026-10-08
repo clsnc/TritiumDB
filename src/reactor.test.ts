@@ -58,7 +58,7 @@ describe('DatabaseReactor', () => {
         const atom = new Atom('');
         const callback = vi.fn();
         const e = expr(value, atom);
-        reactor.subscribe(e, callback);
+        reactor.subscribe(callback, e);
         reactor.set(atom, 'result');
         reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
@@ -69,7 +69,7 @@ describe('DatabaseReactor', () => {
         const atom = new Atom('');
         const other = new Atom('');
         const callback = vi.fn();
-        reactor.subscribe(expr(value, atom), callback);
+        reactor.subscribe(callback, expr(value, atom));
         reactor.set(other, 'res');
         reactor.flushNotifications();
         expect(callback).not.toHaveBeenCalled();
@@ -81,8 +81,8 @@ describe('DatabaseReactor', () => {
         const cb1 = vi.fn();
         const cb2 = vi.fn();
         const e = expr(value, atom);
-        reactor.subscribe(e, cb1);
-        reactor.subscribe(e, cb2);
+        reactor.subscribe(cb1, e);
+        reactor.subscribe(cb2, e);
         reactor.set(atom, 'res');
         reactor.flushNotifications();
         expect(cb1).toHaveBeenCalledTimes(1);
@@ -94,7 +94,7 @@ describe('DatabaseReactor', () => {
         const atom = new Atom('');
         const callback = vi.fn();
         const e = expr(value, atom);
-        const unsubscribe = reactor.subscribe(e, callback);
+        const unsubscribe = reactor.subscribe(callback, e);
         reactor.set(atom, 'res');
         reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
@@ -113,7 +113,7 @@ describe('DatabaseReactor', () => {
         expect(reactor.eval(depFunc, 'key')).toBe(11);
         // Subscribe to dependent expression
         const callback = vi.fn();
-        reactor.subscribe(expr(depFunc, 'key'), callback);
+        reactor.subscribe(callback, expr(depFunc, 'key'));
         // First change: should notify
         reactor.set(base, 20);
         reactor.flushNotifications();
@@ -137,7 +137,7 @@ describe('DatabaseReactor', () => {
         const depFunc = (_arg: string) => spy(value, base) + 1;
 
         reactor.set(base, 10);
-        reactor.subscribe(expr(depFunc, 'key'), callback);
+        reactor.subscribe(callback, expr(depFunc, 'key'));
 
         reactor.set(base, 20);
         reactor.flushNotifications();
@@ -150,7 +150,7 @@ describe('DatabaseReactor', () => {
         const atom = new Atom('');
         const callback = vi.fn();
         const e = expr(value, atom);
-        reactor.subscribe(e, callback);
+        reactor.subscribe(callback, e);
         reactor.set(atom, 'value');
         expect(callback).not.toHaveBeenCalled();
         reactor.flushNotifications();
@@ -161,7 +161,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const a = new Atom(0);
         const callback = vi.fn();
-        reactor.subscribe(expr(value, a), callback);
+        reactor.subscribe(callback, expr(value, a));
         reactor.set(a, 1);
         reactor.set(a, 2);
         reactor.flushNotifications();

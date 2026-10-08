@@ -7,5 +7,5 @@ export function useEval<A extends any[], R>(dbr: Reactor, pred: (...args: A) => 
 }
 
 export function useEvalExpr<A extends any[], R>(dbr: Reactor, expr: Expression<A, R>): R {
-    return useSyncExternalStore((callback: () => void) => dbr.subscribe(expr, callback), () => dbr.evalExpr(expr))
+    return useSyncExternalStore((callback: () => void) => dbr.subscribe(callback, expr), () => dbr.evalExpr(expr))
 }

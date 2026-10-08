@@ -107,7 +107,7 @@ function handle20xClicksChange() {
   console.log(`Changed to ${reactor.eval(multiplyClicks, 20)}`)
 }
 
-const unsubscribe = reactor.subscribe(expr(multiplyClicks, 20), handle20xClicksChange) // Subscribe to changes to the result of multiplyClicks(20)
+const unsubscribe = reactor.subscribe(handle20xClicksChange, expr(multiplyClicks, 20)) // Subscribe to changes to the result of multiplyClicks(20)
 
 reactor.set(clickCountAtom, 15)
 reactor.flushNotifications() // Output: "Changed to 300"
