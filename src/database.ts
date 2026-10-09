@@ -1,13 +1,8 @@
 import { Map as ImmMap, Set as ImmSet } from "immutable"
 import { Expression, expr } from "./expression"
-import { Atom, value } from "./atom"
+import { Atom, value, type AtomAssignments } from "./atom"
 
 export type Value = any
-
-// A list of [<atom>, <atomValue>] pairs
-type AtomAssignments<T extends readonly unknown[]> = {
-    [K in keyof T]: readonly [Atom<T[K]>, NoInfer<T[K]>]
-}
 
 export class RecursiveExpressionComputationError extends Error {
     public readonly name: string
