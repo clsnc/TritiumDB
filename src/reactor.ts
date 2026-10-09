@@ -1,7 +1,7 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database } from './database';
 import { Expression, expr } from './expression';
-import { Atom } from './atom';
+import { Atom, type AtomAssignments } from './atom';
 
 export class Reactor {
     private db: Database;
@@ -67,6 +67,10 @@ export class Reactor {
 
     set<T>(atom: Atom<T>, nextValue: T): void {
         this.applyChangeFunc(() => this.db.withGetAffectedRels(atom, nextValue))
+    }
+
+    setMany<T extends readonly unknown[]>(...assignments: AtomAssignments<T>): void {
+        this.applyChangeFunc(() => this.db.withManyGetAffectedRels(...assignments))
     }
 
     flushNotifications(): void {

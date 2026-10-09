@@ -5,6 +5,54 @@ import { spy } from './spy';
 import { Atom, value } from './atom';
 
 describe('DatabaseReactor', () => {
+    describe('setMany', () => {
+        it('sets multiple values immediately', () => {
+            const reactor = new Reactor();
+            const count = new Atom(0);
+            const name = new Atom('before');
+
+            reactor.setMany([count, 10], [name, 'after']);
+            expect(reactor.eval(value, count)).toBe(10);
+            expect(reactor.eval(value, name)).toBe('after');
+        });
+
+        it('defers notifications and notifies a shared dependent once with the completed state', () => {
+            const reactor = new Reactor();
+            const a = new Atom(1);
+            const b = new Atom(2);
+            const sum = () => spy(value, a) + spy(value, b);
+            const callback = vi.fn(() => reactor.eval(sum));
+            reactor.watch(callback, sum);
+
+            reactor.setMany([a, 10], [b, 20]);
+            expect(callback).not.toHaveBeenCalled();
+            reactor.flushNotifications();
+
+            expect(callback).toHaveBeenCalledTimes(1);
+            expect(callback.mock.results[0].value).toBe(30);
+            reactor.flushNotifications();
+            expect(callback).toHaveBeenCalledTimes(1);
+        });
+
+        it('preserves pending notifications across single, batch, and empty updates', () => {
+            const reactor = new Reactor();
+            const before = new Atom(0);
+            const batch = new Atom(0);
+            const beforeCallback = vi.fn();
+            const batchCallback = vi.fn();
+            reactor.watch(beforeCallback, value, before);
+            reactor.watch(batchCallback, value, batch);
+
+            reactor.set(before, 1);
+            reactor.setMany([batch, 2]);
+            reactor.setMany();
+            reactor.flushNotifications();
+
+            expect(beforeCallback).toHaveBeenCalledTimes(1);
+            expect(batchCallback).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('evalExpr returns set value', () => {
         const reactor = new Reactor();
         const atom = new Atom('');
