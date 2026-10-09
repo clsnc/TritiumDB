@@ -74,7 +74,13 @@ export class Reactor {
     }
 
     flushNotifications(): void {
-        for (const affectedExpr of this.invalidatedExprsPendingSubscriberNotifications) {
+        /* Capture the pending notifications, then empty the stored ones. This prevents 
+           infinitely repeating notifications if a callback calls this method again. */
+        const pendingNotifications = this.invalidatedExprsPendingSubscriberNotifications;
+        this.invalidatedExprsPendingSubscriberNotifications = ImmSet();
+
+        // Call the callbacks for each notification
+        for (const affectedExpr of pendingNotifications) {
             const callbacks = this.subscribers.get(affectedExpr);
             if (callbacks) {
                 for (const callback of callbacks) {
@@ -82,6 +88,5 @@ export class Reactor {
                 }
             }
         }
-        this.invalidatedExprsPendingSubscriberNotifications = ImmSet();
     }
 }

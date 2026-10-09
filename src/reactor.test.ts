@@ -244,6 +244,45 @@ describe('DatabaseReactor', () => {
         expect(callback).toHaveBeenCalledTimes(1);
     });
 
+    it('does not repeat notifications when a callback flushes again', () => {
+        const reactor = new Reactor();
+        const atom = new Atom(0);
+        const callback = vi.fn(() => reactor.flushNotifications());
+        const otherCallback = vi.fn();
+        reactor.watch(callback, value, atom);
+        reactor.watch(otherCallback, value, atom);
+
+        reactor.set(atom, 1);
+        reactor.flushNotifications();
+
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(otherCallback).toHaveBeenCalledTimes(1);
+        reactor.flushNotifications();
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(otherCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves notifications queued by a callback for the next flush', () => {
+        const reactor = new Reactor();
+        const atom = new Atom(0);
+        const other = new Atom(0);
+        const callback = vi.fn(() => reactor.set(other, 1));
+        const otherCallback = vi.fn();
+        reactor.watch(callback, value, atom);
+        reactor.watch(otherCallback, value, other);
+
+        reactor.set(atom, 1);
+        reactor.flushNotifications();
+
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(otherCallback).not.toHaveBeenCalled();
+        reactor.flushNotifications();
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(otherCallback).toHaveBeenCalledTimes(1);
+        reactor.flushNotifications();
+        expect(otherCallback).toHaveBeenCalledTimes(1);
+    });
+
     it('does not double-notify when the same expression is set multiple times before flushing', () => {
         const reactor = new Reactor();
         const a = new Atom(0);
