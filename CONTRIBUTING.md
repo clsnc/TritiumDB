@@ -5,6 +5,7 @@
 ```bash
 npm test -- --run                       # run once
 npm test -- src/database.test.ts --run  # single file
+npm run test:types                      # type tests only
 npm run build
 npm run clean
 ```

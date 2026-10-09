@@ -7,6 +7,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "build": "node ./node_modules/typescript/bin/tsc",
+    "test:types": "node ./node_modules/vitest/vitest.mjs run --typecheck.only",
     "prepare": "npm run build",
     "test": "node ./node_modules/vitest/vitest.mjs",
     "prepublishOnly": "npm run build"
