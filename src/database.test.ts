@@ -1,16 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
+import fc from 'fast-check'
 import { Database, RecursiveExpressionComputationError } from './database'
 import { spy, spyExpr } from './spy'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
 describe('ReactiveDatabase', () => {
-  it('creates a ReactiveDatabase instance', () => {
-    const rdb = new Database()
-
-    expect(rdb).toBeInstanceOf(Database)
-  })
-
   it('eval accepts a function with no arguments', () => {
     const db = new Database()
 
@@ -89,17 +84,48 @@ describe('ReactiveDatabase', () => {
     expect(recursiveCallCount).toBe(1)
   })
 
-  it('creates immutable database with with() method', () => {
-    const rdb = new Database()
-    const atom = new Atom<string | undefined>(undefined)
-    const result = 'test-result'
+  it("atom update sequences produce correct results but don't modify earlier Databases", () => {
+    const text = fc.string()
+    const atomValue = fc.option(text, { nil: undefined })
+    const update = fc.oneof(
+      fc.record({ kind: fc.constant('set' as const), value: atomValue }),
+      fc.record({ kind: fc.constant('modify' as const), suffix: text })
+    )
 
-    const newDb = rdb.with(atom, result)
+    fc.assert(
+      fc.property(atomValue, fc.array(update), (defaultValue, updates) => {
+        const atom = new Atom<string | undefined>(defaultValue)
+        let db = new Database()
+        let expectedValue = defaultValue
+        const snapshots: [Database, string | undefined][] = [[db, expectedValue]]
 
-    expect(newDb).toBeInstanceOf(Database)
-    expect(newDb).not.toBe(rdb) // Should be a new instance
-    expect(newDb.eval(value, atom)).toBe(result)
-    expect(rdb.eval(value, atom)).toBeUndefined() // Original unchanged
+        expect(db.eval(value, atom)).toBe(expectedValue)
+
+        // Apply a sequence of updates and check the value in all Databases after each update
+        for (const operation of updates) {
+          // Calculate the next model value independently of the database APIs.
+          const nextExpectedValue = operation.kind === 'set'
+            ? operation.value
+            : (expectedValue ?? '') + operation.suffix
+
+          const nextDb = operation.kind === 'set'
+            ? db.with(atom, operation.value)
+            : db.withModified(atom, oldValue => (oldValue ?? '') + operation.suffix)
+
+          expect(nextDb).toBeInstanceOf(Database)
+          expect(nextDb).not.toBe(db)
+
+          db = nextDb
+          expectedValue = nextExpectedValue
+          snapshots.push([db, expectedValue])
+
+          // Check the new value and all saved snapshots
+          for (const [snapshot, expected] of snapshots) {
+            expect(snapshot.eval(value, atom)).toBe(expected)
+          }
+        }
+      })
+    )
   })
 
   it('returns affected expressions with withGetAffectedRels()', () => {
@@ -194,22 +220,6 @@ describe('ReactiveDatabase', () => {
     expect(db.eval(func3)).toBe('func3-func1-new-value1-func2-value2')
   })
 
-  it('maintains immutability when creating new instances', () => {
-    const rdb = new Database()
-    const atom = new Atom<string | undefined>(undefined)
-
-    const db1 = rdb.with(atom, 'value1')
-    const db2 = db1.with(atom, 'value2')
-
-    // Each database should have its own state
-    expect(rdb.eval(value, atom)).toBeUndefined()
-    expect(db1.eval(value, atom)).toBe('value1')
-    expect(db2.eval(value, atom)).toBe('value2')
-
-    // Original databases should be unchanged
-    expect(db1.eval(value, atom)).toBe('value1')
-  })
-
   it('handles function expressions with multiple arguments', () => {
     const rdb = new Database()
     const func = vi.fn((arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
@@ -268,24 +278,6 @@ describe('ReactiveDatabase', () => {
     expect(db.eval(quadrupleFunc)).toBe(40)
   })
 
-  it('withModified creates new database with modified atom value', () => {
-    const rdb = new Database()
-    const atom = new Atom<string | undefined>(undefined)
-    const initialResult = 'initial-value'
-
-    // Set initial value
-    const db1 = rdb.with(atom, initialResult)
-
-    // Modify the atom using withModified
-    const modifier = (oldVal: string | undefined) => `modified-${oldVal}`
-    const db2 = db1.withModified(atom, modifier)
-
-    expect(db2).toBeInstanceOf(Database)
-    expect(db2).not.toBe(db1) // Should be a new instance
-    expect(db1.eval(value, atom)).toBe(initialResult) // Original unchanged
-    expect(db2.eval(value, atom)).toBe('modified-initial-value') // Modified in new db
-  })
-
   it('withModifiedGetAffectedRels returns affected expressions', () => {
     const rdb = new Database()
     const atom = new Atom<string | undefined>(undefined)
@@ -330,17 +322,6 @@ describe('ReactiveDatabase', () => {
     expect(result2).toBe('dependent-original-modified')
   })
 
-  it('withModified handles undefined initial values', () => {
-    const rdb = new Database()
-    const atom = new Atom<string | undefined>(undefined)
-
-    // Modify an atom with an undefined default value
-    const modifier = (oldVal: string | undefined) => oldVal === undefined ? 'default-value' : `modified-${oldVal}`
-    const db2 = rdb.withModified(atom, modifier)
-
-    expect(db2.eval(value, atom)).toBe('default-value')
-  })
-
   it('withModifiedGetAffectedRels includes dependent expressions in affected set', () => {
     const rdb = new Database()
     const base = new Atom<string | undefined>(undefined)
@@ -366,25 +347,6 @@ describe('ReactiveDatabase', () => {
     // Both base and dependent expressions should be affected
     expect(affectedExprs.has(baseExpr)).toBe(true)
     expect(affectedExprs.has(dependentExpr)).toBe(true)
-  })
-
-  it('withModified maintains immutability across multiple modifications', () => {
-    const rdb = new Database()
-    const counter = new Atom(0)
-
-    const db1 = rdb.withModified(counter, val => val + 1)
-    const db2 = db1.withModified(counter, val => val * 2)
-    const db3 = db2.withModified(counter, val => val - 3)
-
-    // Each database should have its own state
-    expect(rdb.eval(value, counter)).toBe(0)
-    expect(db1.eval(value, counter)).toBe(1)
-    expect(db2.eval(value, counter)).toBe(2)
-    expect(db3.eval(value, counter)).toBe(-1)
-
-    // Original databases should be unchanged
-    expect(db1.eval(value, counter)).toBe(1)
-    expect(db2.eval(value, counter)).toBe(2)
   })
 
   it('caches and rethrows the same error instance', () => {
