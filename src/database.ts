@@ -4,6 +4,11 @@ import { Atom, value } from "./atom"
 
 export type Value = any
 
+// A list of [<atom>, <atomValue>] pairs
+type AtomAssignments<T extends readonly unknown[]> = {
+    [K in keyof T]: readonly [Atom<T[K]>, NoInfer<T[K]>]
+}
+
 export class RecursiveExpressionComputationError extends Error {
     public readonly name: string
 
@@ -222,6 +227,32 @@ export class Database {
         const affectedRels = newDb.setResultGetAffectedExprs(expr(value, atom), new ExpressionResult(nextValue, true))
 
         return [newDb, affectedRels]
+    }
+
+    withMany<T extends readonly unknown[]>(...assignments: AtomAssignments<T>): Database {
+        return this.withManyGetAffectedRels(...assignments)[0]
+    }
+
+    withManyGetAffectedRels<T extends readonly unknown[]>(...assignments: AtomAssignments<T>): [Database, ImmSet<Expression>] {
+        // If there are no assignments provided, just use the current Database
+        if(assignments.length === 0) {
+            return [this, ImmSet<Expression>()]
+        }
+
+        // Create the new Database
+        const newDb = new Database(
+            this.exprToCachedResult,
+            this.exprToContributorExprs,
+            this.exprToDependentExprs
+        )
+
+        // Apply the assignments to the new Database and collect the invalidated expressions
+        let affectedExprs = ImmSet<Expression>()
+        for (const [atom, nextValue] of assignments) {
+            affectedExprs = affectedExprs.union(newDb.setResultGetAffectedExprs(expr(value, atom), new ExpressionResult(nextValue, true)))
+        }
+
+        return [newDb, affectedExprs]
     }
 
     withModified<T>(atom: Atom<T>, modifier: (oldValue: T) => T): Database {

@@ -6,6 +6,90 @@ import { expr } from './expression'
 import { Atom, value } from './atom'
 
 describe('ReactiveDatabase', () => {
+  describe('batch assignments', () => {
+    it('sets heterogeneous readonly assignments without changing the original snapshot', () => {
+      const count = new Atom(0)
+      const name = new Atom('default')
+      const db = new Database().with(count, 1).with(name, 'before')
+      const assignments = [[count, 10], [name, 'after']] as const
+      const nextDb = db.withMany(...assignments)
+
+      expect(nextDb).not.toBe(db)
+      expect(nextDb.eval(value, count)).toBe(10)
+      expect(nextDb.eval(value, name)).toBe('after')
+      expect(db.eval(value, count)).toBe(1)
+      expect(db.eval(value, name)).toBe('before')
+    })
+
+    it('unions direct, shared, and transitive invalidations while preserving unrelated caches', () => {
+      const a = new Atom(1)
+      const b = new Atom(2)
+      const other = new Atom(3)
+      const left = vi.fn(() => spy(value, a) * 2)
+      const right = vi.fn(() => spy(value, b) * 3)
+      const shared = vi.fn(() => spy(left) + spy(right))
+      const transitive = vi.fn(() => spy(shared) + 1)
+      const unrelated = vi.fn(() => spy(value, other))
+      const db = new Database()
+      expect(db.eval(transitive)).toBe(9)
+      expect(db.eval(unrelated)).toBe(3)
+
+      const [nextDb, affected] = db.withManyGetAffectedRels([a, 10], [b, 20])
+      const expected = [expr(value, a), expr(value, b), expr(left), expr(right), expr(shared), expr(transitive)]
+      expect(affected.size).toBe(expected.length)
+      for (const expression of expected) expect(affected.has(expression)).toBe(true)
+      // Applying the batch must not run any derived computations.
+      for (const computation of [left, right, shared, transitive, unrelated]) {
+        expect(computation).toHaveBeenCalledTimes(1)
+      }
+
+      expect(nextDb.eval(transitive)).toBe(81)
+      expect(nextDb.eval(unrelated)).toBe(3)
+      expect(db.eval(transitive)).toBe(9)
+      for (const computation of [left, right, shared, transitive]) {
+        expect(computation).toHaveBeenCalledTimes(2)
+      }
+      expect(unrelated).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses the last duplicate assignment and retains earlier invalidations', () => {
+      const atom = new Atom(0)
+      const dependent = () => spy(value, atom) + 1
+      const db = new Database()
+      db.eval(dependent)
+
+      const [nextDb, affected] = db.withManyGetAffectedRels([atom, 10], [atom, 20])
+      expect(nextDb.eval(value, atom)).toBe(20)
+      expect(nextDb.eval(dependent)).toBe(21)
+      expect(affected.size).toBe(2)
+      expect(affected.has(expr(value, atom))).toBe(true)
+      expect(affected.has(expr(dependent))).toBe(true)
+      expect(db.eval(dependent)).toBe(1)
+    })
+
+    it('invalidates dependencies even when assigned values are unchanged', () => {
+      const atom = new Atom(1)
+      const dependent = vi.fn(() => spy(value, atom) + 1)
+      const db = new Database()
+      db.eval(dependent)
+
+      const [nextDb, affected] = db.withManyGetAffectedRels([atom, 1])
+      expect(nextDb).not.toBe(db)
+      expect(affected.size).toBe(2)
+      expect(affected.has(expr(dependent))).toBe(true)
+      expect(nextDb.eval(dependent)).toBe(2)
+      expect(dependent).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns the original snapshot and no invalidations for an empty batch', () => {
+      const db = new Database()
+      const [nextDb, affected] = db.withManyGetAffectedRels()
+      expect(nextDb).toBe(db)
+      expect(affected.size).toBe(0)
+      expect(db.withMany()).toBe(db)
+    })
+  })
+
   it('eval accepts a function with no arguments', () => {
     const db = new Database()
 
