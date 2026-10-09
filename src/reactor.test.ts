@@ -16,7 +16,7 @@ describe('DatabaseReactor', () => {
             expect(reactor.eval(value, name)).toBe('after');
         });
 
-        it('defers notifications and notifies a shared dependent once with the completed state', () => {
+        it('notifies a shared dependent once with the completed state', () => {
             const reactor = new Reactor();
             const a = new Atom(1);
             const b = new Atom(2);
@@ -25,16 +25,12 @@ describe('DatabaseReactor', () => {
             reactor.watch(callback, sum);
 
             reactor.setMany([a, 10], [b, 20]);
-            expect(callback).not.toHaveBeenCalled();
-            reactor.flushNotifications();
 
             expect(callback).toHaveBeenCalledTimes(1);
             expect(callback.mock.results[0].value).toBe(30);
-            reactor.flushNotifications();
-            expect(callback).toHaveBeenCalledTimes(1);
         });
 
-        it('preserves pending notifications across single, batch, and empty updates', () => {
+        it('notifies for single and batch updates but not empty updates', () => {
             const reactor = new Reactor();
             const before = new Atom(0);
             const batch = new Atom(0);
@@ -44,10 +40,14 @@ describe('DatabaseReactor', () => {
             reactor.watch(batchCallback, value, batch);
 
             reactor.set(before, 1);
-            reactor.setMany([batch, 2]);
-            reactor.setMany();
-            reactor.flushNotifications();
+            expect(beforeCallback).toHaveBeenCalledTimes(1);
+            expect(batchCallback).not.toHaveBeenCalled();
 
+            reactor.setMany([batch, 2]);
+            expect(beforeCallback).toHaveBeenCalledTimes(1);
+            expect(batchCallback).toHaveBeenCalledTimes(1);
+
+            reactor.setMany();
             expect(beforeCallback).toHaveBeenCalledTimes(1);
             expect(batchCallback).toHaveBeenCalledTimes(1);
         });
@@ -110,13 +110,12 @@ describe('DatabaseReactor', () => {
         reactor.watch(callback, func);
         expect(callback).not.toHaveBeenCalled();
         reactor.set(base, 2);
-        reactor.flushNotifications();
 
         expect(callback).toHaveBeenCalledExactlyOnceWith();
         expect(reactor.eval(func)).toBe(3);
     });
 
-    it('watch tracks dependencies, defers notifications, and supports unsubscribing', () => {
+    it('watch tracks dependencies, notifies synchronously, and supports unsubscribing', () => {
         const reactor = new Reactor();
         const base = new Atom(1);
         const other = new Atom(0);
@@ -125,29 +124,14 @@ describe('DatabaseReactor', () => {
         const unsubscribe = reactor.watch(callback, func, 3);
 
         reactor.set(other, 1);
-        reactor.flushNotifications();
         expect(callback).not.toHaveBeenCalled();
 
         reactor.set(base, 2);
-        expect(callback).not.toHaveBeenCalled();
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
         expect(reactor.eval(func, 3)).toBe(6);
 
         unsubscribe();
         reactor.set(base, 3);
-        reactor.flushNotifications();
-        expect(callback).toHaveBeenCalledTimes(1);
-    });
-
-    it('set notifies subscribers for affected expression', () => {
-        const reactor = new Reactor();
-        const atom = new Atom('');
-        const callback = vi.fn();
-        const e = expr(value, atom);
-        reactor.watchExpr(callback, e);
-        reactor.set(atom, 'result');
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
     });
 
@@ -158,7 +142,6 @@ describe('DatabaseReactor', () => {
         const callback = vi.fn();
         reactor.watchExpr(callback, expr(value, atom));
         reactor.set(other, 'res');
-        reactor.flushNotifications();
         expect(callback).not.toHaveBeenCalled();
     });
 
@@ -171,7 +154,6 @@ describe('DatabaseReactor', () => {
         reactor.watchExpr(cb1, e);
         reactor.watchExpr(cb2, e);
         reactor.set(atom, 'res');
-        reactor.flushNotifications();
         expect(cb1).toHaveBeenCalledTimes(1);
         expect(cb2).toHaveBeenCalledTimes(1);
     });
@@ -183,11 +165,9 @@ describe('DatabaseReactor', () => {
         const e = expr(value, atom);
         const unsubscribe = reactor.watchExpr(callback, e);
         reactor.set(atom, 'res');
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
         unsubscribe();
         reactor.set(atom, 'res2');
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
     });
 
@@ -203,17 +183,14 @@ describe('DatabaseReactor', () => {
         reactor.watchExpr(callback, expr(depFunc, 'key'));
         // First change: should notify
         reactor.set(base, 20);
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
         // Second change without recompute: should not notify
         reactor.set(base, 30);
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
         // Recompute dependent
         expect(reactor.eval(depFunc, 'key')).toBe(31);
         // Third change after recompute: should notify again
         reactor.set(base, 40);
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(2);
     });
 
@@ -227,70 +204,55 @@ describe('DatabaseReactor', () => {
         reactor.watchExpr(callback, expr(depFunc, 'key'));
 
         reactor.set(base, 20);
-        reactor.flushNotifications();
 
         expect(callback).toHaveBeenCalledTimes(1);
     });
 
-    it('callbacks are not called until flushNotifications', () => {
-        const reactor = new Reactor();
-        const atom = new Atom('');
-        const callback = vi.fn();
-        const e = expr(value, atom);
-        reactor.watchExpr(callback, e);
-        reactor.set(atom, 'value');
-        expect(callback).not.toHaveBeenCalled();
-        reactor.flushNotifications();
-        expect(callback).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not repeat notifications when a callback flushes again', () => {
-        const reactor = new Reactor();
-        const atom = new Atom(0);
-        const callback = vi.fn(() => reactor.flushNotifications());
-        const otherCallback = vi.fn();
-        reactor.watch(callback, value, atom);
-        reactor.watch(otherCallback, value, atom);
-
-        reactor.set(atom, 1);
-        reactor.flushNotifications();
-
-        expect(callback).toHaveBeenCalledTimes(1);
-        expect(otherCallback).toHaveBeenCalledTimes(1);
-        reactor.flushNotifications();
-        expect(callback).toHaveBeenCalledTimes(1);
-        expect(otherCallback).toHaveBeenCalledTimes(1);
-    });
-
-    it('preserves notifications queued by a callback for the next flush', () => {
+    it('does not repeat notifications when a callback makes another change', () => {
         const reactor = new Reactor();
         const atom = new Atom(0);
         const other = new Atom(0);
         const callback = vi.fn(() => reactor.set(other, 1));
         const otherCallback = vi.fn();
+        const nestedCallback = vi.fn();
+        reactor.watch(callback, value, atom);
+        reactor.watch(otherCallback, value, atom);
+        reactor.watch(nestedCallback, value, other);
+
+        reactor.set(atom, 1);
+
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(otherCallback).toHaveBeenCalledTimes(1);
+        expect(nestedCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('notifies synchronously for updates made inside a callback', () => {
+        const reactor = new Reactor();
+        const atom = new Atom(0);
+        const other = new Atom(0);
+        const otherCallback = vi.fn(() => reactor.eval(value, other));
+        const callback = vi.fn(() => {
+            reactor.set(other, 1);
+            expect(otherCallback).toHaveBeenCalledTimes(1);
+        });
         reactor.watch(callback, value, atom);
         reactor.watch(otherCallback, value, other);
 
         reactor.set(atom, 1);
-        reactor.flushNotifications();
 
         expect(callback).toHaveBeenCalledTimes(1);
-        expect(otherCallback).not.toHaveBeenCalled();
-        reactor.flushNotifications();
-        expect(callback).toHaveBeenCalledTimes(1);
         expect(otherCallback).toHaveBeenCalledTimes(1);
-        reactor.flushNotifications();
-        expect(otherCallback).toHaveBeenCalledTimes(1);
+        expect(otherCallback.mock.results[0].value).toBe(1);
     });
 
-    it('does not double-notify when the same expression is set multiple times before flushing', () => {
+    it('notifies separately for consecutive sets of the same expression', () => {
         const reactor = new Reactor();
         const a = new Atom(0);
         const callback = vi.fn();
         reactor.watchExpr(callback, expr(value, a));
         reactor.set(a, 1);
-        reactor.set(a, 2);
-        reactor.flushNotifications();
         expect(callback).toHaveBeenCalledTimes(1);
+        reactor.set(a, 2);
+        expect(callback).toHaveBeenCalledTimes(2);
     });
 });

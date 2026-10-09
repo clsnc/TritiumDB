@@ -17,6 +17,7 @@ export class Reactor {
         const [newDb, affectedExprs] = func()
         this.db = newDb;
         this.invalidatedExprsPendingSubscriberNotifications = this.invalidatedExprsPendingSubscriberNotifications.union(affectedExprs);
+        this.flushNotifications();
     }
 
     watch<A extends any[], R>(callback: () => void, pred: (...args: A) => R, ...args: A): () => void {
@@ -73,9 +74,9 @@ export class Reactor {
         this.applyChangeFunc(() => this.db.withManyGetAffectedRels(...assignments))
     }
 
-    flushNotifications(): void {
+    protected flushNotifications(): void {
         /* Capture the pending notifications, then empty the stored ones. This prevents 
-           infinitely repeating notifications if a callback calls this method again. */
+           infinitely repeating notifications if a callback triggers another flush. */
         const pendingNotifications = this.invalidatedExprsPendingSubscriberNotifications;
         this.invalidatedExprsPendingSubscriberNotifications = ImmSet();
 

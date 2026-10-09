@@ -98,7 +98,7 @@ console.log(reactor.eval(value, clickCountAtom)) // Output: 11
 console.log(reactor.eval(tripleClicks)) // Output: 33
 ```
 
-Sometimes we want to take an action when some part of the application state changes. `Reactor.watch` lets us subscribe to be notified when a function call's return value may have changed. It returns a function that can be used to unsubscribe at any time. To trigger notifications to be sent out, `Reactor.flushNotifications` must be called.
+Sometimes we want to take an action when some part of the application state changes. `Reactor.watch` lets us subscribe to be notified when a function call's return value may have changed. It returns a function that can be used to unsubscribe at any time.
 
 ```js
 function handle20xClicksChange() {
@@ -107,13 +107,11 @@ function handle20xClicksChange() {
 
 const unsubscribe = reactor.watch(handle20xClicksChange, multiplyClicks, 20) // Subscribe to changes to the result of multiplyClicks(20)
 
-reactor.set(clickCountAtom, 15)
-reactor.flushNotifications() // Output: "Changed to 300"
+reactor.set(clickCountAtom, 15) // Output: "Changed to 300"
 
 unsubscribe() // Unsubscribe to changes to the result of multiplyClicks(20)
 
-reactor.set(clickCountAtom, 16)
-reactor.flushNotifications() // No output
+reactor.set(clickCountAtom, 16) // No output
 ```
 
 ## React
@@ -130,7 +128,6 @@ function ClickCounter() {
   return (
     <button onClick={() => {
       reactor.modify(clickCountAtom, count => count + 1)
-      reactor.flushNotifications()
     }}>
       Clicks: {numClicks}; Quadruple clicks: {quadrupleNumClicks}
     </button>
