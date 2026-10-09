@@ -116,17 +116,46 @@ describe('ReactiveDatabase', () => {
     )
   })
 
-  it('returns affected expressions with withGetAffectedRels()', () => {
-    const rdb = new Database()
-    const atom = new Atom<string | undefined>(undefined)
-    const e = expr(value, atom)
-    const result = 'test-result'
+  it('atom updates report exactly their established direct and transitive dependents', () => {
+    fc.assert(fc.property(
+      fc.integer(), fc.integer(), fc.integer(), fc.boolean(), fc.boolean(), fc.boolean(),
+      (defaultLeft, defaultRight, operand, updateLeft, modify, warmGraph) => {
+        const leftAtom = new Atom(defaultLeft)
+        const rightAtom = new Atom(defaultRight)
+        const left = () => spyExpr(expr(value, leftAtom)) * 2
+        const right = () => spy(value, rightAtom) * 3
+        const combined = () => spy(left) + spy(right)
+        const db = new Database()
 
-    const [newDb, affectedExprs] = rdb.withGetAffectedRels(atom, result)
+        // Dependencies only exist after the graph has been evaluated
+        if (warmGraph) {
+          db.eval(combined)
+        }
 
-    expect(newDb).toBeInstanceOf(Database)
-    expect(affectedExprs.has(e)).toBe(true)
-    expect(newDb.evalExpr(e)).toBe(result)
+        const atom = updateLeft ? leftAtom : rightAtom
+        const initialValue = updateLeft ? defaultLeft : defaultRight
+        const expectedValue = modify ? initialValue + operand : operand
+        const [nextDb, affectedExprs] = modify
+          ? db.withModifiedGetAffectedRels(atom, oldValue => oldValue + operand)
+          : db.withGetAffectedRels(atom, operand)
+
+        // Whether the graph is warm determines which invalidations are expected
+        const expectedExprs = warmGraph
+          ? [expr(value, atom), expr(updateLeft ? left : right), expr(combined)]
+          : [expr(value, atom)]
+
+        // Check that all expected expressions have been invalidated
+        for (const expression of expectedExprs) {
+          expect(affectedExprs.has(expression)).toBe(true)
+        }
+
+        // Check that there are no extra invalidated expressions
+        expect(affectedExprs.size).toBe(expectedExprs.length)
+
+        expect(nextDb).toBeInstanceOf(Database)
+        expect(nextDb.evalExpr(expr(value, atom))).toBe(expectedValue)
+      }
+    ))
   })
 
   it('atom updates recompute direct and transitive dependents but preserve unrelated cached results', () => {
@@ -188,51 +217,6 @@ describe('ReactiveDatabase', () => {
     const result = rdb.evalExpr(e)
     expect(result).toBe('a-b-c')
     expect(func).toHaveBeenCalledWith('a', 'b', 'c')
-  })
-
-  it('withModifiedGetAffectedRels returns affected expressions', () => {
-    const rdb = new Database()
-    const atom = new Atom<string | undefined>(undefined)
-    const e = expr(value, atom)
-    const initialResult = 'initial-value'
-
-    // Set initial value
-    const db1 = rdb.with(atom, initialResult)
-
-    // Modify the atom value using withModifiedGetAffectedRels
-    const modifier = (oldVal: string | undefined) => `modified-${oldVal}`
-    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(atom, modifier)
-
-    expect(db2).toBeInstanceOf(Database)
-    expect(affectedExprs.has(e)).toBe(true)
-    expect(db2.evalExpr(e)).toBe('modified-initial-value')
-  })
-
-  it('withModifiedGetAffectedRels includes dependent expressions in affected set', () => {
-    const rdb = new Database()
-    const base = new Atom<string | undefined>(undefined)
-
-    // Set up base atom and its value expression
-    const baseExpr = expr(value, base)
-    const db1 = rdb.with(base, 'original')
-
-    // Create dependent expression
-    const dependentFunc = () => {
-      const baseValue = spyExpr(baseExpr)
-      return `dependent-${baseValue}`
-    }
-    const dependentExpr = expr(dependentFunc)
-
-    // Compute dependent to establish dependency
-    db1.evalExpr(dependentExpr)
-
-    // Modify base atom value and get affected expressions
-    const modifier = (oldVal: string | undefined) => `${oldVal}-modified`
-    const [db2, affectedExprs] = db1.withModifiedGetAffectedRels(base, modifier)
-
-    // Both base and dependent expressions should be affected
-    expect(affectedExprs.has(baseExpr)).toBe(true)
-    expect(affectedExprs.has(dependentExpr)).toBe(true)
   })
 
   it('caches and rethrows the same error instance', () => {
