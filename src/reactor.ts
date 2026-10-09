@@ -74,6 +74,7 @@ export class Reactor {
         this.applyChangeFunc(() => this.db.withManyGetAffectedRels(...assignments))
     }
 
+    // TODO: Think through whether current notification ordering when callbacks make changes is desired
     protected flushNotifications(): void {
         /* Capture the pending notifications, then empty the stored ones. This prevents 
            infinitely repeating notifications if a callback triggers another flush. */
