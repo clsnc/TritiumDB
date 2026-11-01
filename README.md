@@ -35,13 +35,11 @@ console.log(oneClickDb.eval(value, clickCountAtom)) // Output: 1
 console.log(defaultDb.eval(value, clickCountAtom)) // Output: 0 (defaultDb hasn't changed)
 ```
 
-A `Database` can also evaluate functions that use its `Atom` values. For this to work properly, functions must call `value` via the `spy` function to establish dependency on an `Atom`. A `spy` call knows which `Database` to use because it is called during execution of a `.eval` call on that `Database`.
+A `Database` can also evaluate functions that use its `Atom` values.
 
 ```js
-import { spy } from 'tritiumdb'
-
 function multiplyClicks(multiplier) {
-  const numClicks = spy(value, clickCountAtom) // Establish dependency on a Database's clickCountAtom value
+  const numClicks = value(clickCountAtom) // Establish dependency on a Database's clickCountAtom value
   return numClicks * multiplier
 }
 
@@ -49,31 +47,33 @@ console.log(defaultDb.eval(multiplyClicks, 5)) // Output: 0
 console.log(oneClickDb.eval(multiplyClicks, 5)) // Output: 5
 ```
 
-`spy` can also be used to establish dependency on other function calls.
+Function calls that depend on `Atom` values can be nested arbitrarily.
 
 ```js
 function tripleClicks() {
-  return spy(multiplyClicks, 3)
+  return multiplyClicks(3)
 }
 
 console.log(oneClickDb.eval(tripleClicks)) // Output: 3
 console.log(defaultDb.eval(tripleClicks)) // Output: 0
 ```
 
-Because a `Database`'s `Atom` values never change, it can cache the results of function evaluations. Because side effects aren't guaranteed to be repeated, you should only use pure functions in most cases.
+Because a `Database`'s `Atom` values never change, the result of a function evaluation in a given `Database` can be cached. You can create a cached version of your function using `memoize`. Because side effects aren't guaranteed to be repeated, you should only use pure functions in most cases.
 
 ```js
-function multiplyClicksLoudly(multiplier) {
-  const numClicks = spy(value, clickCountAtom) // Establish dependency on a Database's clickCountAtom value
+import { memoize } from 'tritiumdb'
+
+const multiplyClicksLoudly = memoize((multiplier) => {
+  const numClicks = value(clickCountAtom) // Establish dependency on a Database's clickCountAtom value
   console.log(`MULTIPLYING ${numClicks} by ${multiplier}!`)
   return numClicks * multiplier
-}
+})
 
 defaultDb.eval(multiplyClicksLoudly, 5) // Output: "MULTIPLYING 0 by 5!"
 oneClickDb.eval(multiplyClicksLoudly, 5) // Output: "MULTIPLYING 1 by 5!"
 defaultDb.eval(multiplyClicksLoudly, 5) // No output because the evaluation result is cached
 oneClickDb.eval(multiplyClicksLoudly, 5) // No output because the evaluation result is cached
-```
+``` 
 
 ## `Reactor`
 
