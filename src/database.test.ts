@@ -5,7 +5,7 @@ import fc from 'fast-check'
 import { Map as ImmMap } from 'immutable'
 import { Database, RecursiveExpressionComputationError } from './database'
 import { spy, spyExpr } from './spy'
-import { expr } from './expression'
+import { expr, type Expression } from './expression'
 import { Atom, value } from './atom'
 
 describe('ReactiveDatabase', () => {
@@ -53,6 +53,49 @@ describe('ReactiveDatabase', () => {
       ]))
 
       expect(() => db.getAtomValue(atom)).toThrow(error)
+    })
+  })
+
+  describe('addDependencyToComputingExpression', () => {
+    class TestDatabase extends Database {
+      override addDependencyToComputingExpression(expression: Expression): void {
+        super.addDependencyToComputingExpression(expression)
+      }
+    }
+
+    it('does nothing outside a computation and does not evaluate the expression', () => {
+      const db = new TestDatabase()
+      const contributor = vi.fn(() => { throw new Error('must not run') })
+
+      expect(db.addDependencyToComputingExpression(expr(contributor))).toBeUndefined()
+      expect(contributor).not.toHaveBeenCalled()
+    })
+
+    it('does not evaluate the dependency during a computation', () => {
+      const db = new TestDatabase()
+      const contributor = vi.fn(() => { throw new Error('must not run') })
+
+      db.eval(() => db.addDependencyToComputingExpression(expr(contributor)))
+
+      expect(contributor).not.toHaveBeenCalled()
+    })
+
+    it('records dependencies for invalidation without resolving them', () => {
+      const db = new TestDatabase()
+      const atom = new Atom(1)
+      const atomExpr = expr(value, atom)
+      const dependent = vi.fn(() => {
+        db.addDependencyToComputingExpression(atomExpr)
+        return db.getAtomValue(atom) + 1
+      })
+
+      expect(db.eval(dependent)).toBe(2)
+      const [, affected] = db.withGetAffectedRels(atom, 10)
+
+      expect(affected.size).toBe(2)
+      expect(affected.has(atomExpr)).toBe(true)
+      expect(affected.has(expr(dependent))).toBe(true)
+      expect(dependent).toHaveBeenCalledTimes(1)
     })
   })
 

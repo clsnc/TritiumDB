@@ -159,14 +159,18 @@ export class Database {
         return affectedExprs
     }
 
-    /** @internal Only called by module-level `spyExpr`; requires this to already be the active database. */
-    recordDependencyAndResolve<A extends any[], R>(expr: Expression<A, R>): R {
+    /** Records a dependency of the currently computing expression. */
+    protected addDependencyToComputingExpression(expr: Expression): void {
         /* If there is a currently computing expression, then that expression must depend on the one
            whose result is being requested. So that dependency should be recorded. */
         if (this.currentDeepestComputingExpr !== null) {
             this.addDependency(this.currentDeepestComputingExpr, expr)
         }
+    }
 
+    /** @internal Only called by module-level `spyExpr`; requires this to already be the active database. */
+    recordDependencyAndResolve<A extends any[], R>(expr: Expression<A, R>): R {
+        this.addDependencyToComputingExpression(expr)
         return this.resolveResult(expr)
     }
 
