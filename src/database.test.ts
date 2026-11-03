@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 import fc from 'fast-check'
 import { Map as ImmMap } from 'immutable'
 import { activeDatabase, Database, emptyDatabase, RecursiveExpressionComputationError } from './database'
-import { spy, spyExpr } from './spy'
+import { memoize } from './memoize'
 import { expr, type Expression } from './expression'
 import { Atom, value } from './atom'
 
@@ -224,11 +224,14 @@ describe('ReactiveDatabase', () => {
       const a = new Atom(1)
       const b = new Atom(2)
       const other = new Atom(3)
-      const left = vi.fn(() => spy(value, a) * 2)
-      const right = vi.fn(() => spy(value, b) * 3)
-      const shared = vi.fn(() => spy(left) + spy(right))
-      const transitive = vi.fn(() => spy(shared) + 1)
-      const unrelated = vi.fn(() => spy(value, other))
+      const left = vi.fn(() => value(a) * 2)
+      const right = vi.fn(() => value(b) * 3)
+      const memoizedLeft = memoize(left)
+      const memoizedRight = memoize(right)
+      const shared = vi.fn(() => memoizedLeft() + memoizedRight())
+      const memoizedShared = memoize(shared)
+      const transitive = vi.fn(() => memoizedShared() + 1)
+      const unrelated = vi.fn(() => value(other))
       const db = emptyDatabase
       expect(db.eval(transitive)).toBe(9)
       expect(db.eval(unrelated)).toBe(3)
@@ -253,7 +256,7 @@ describe('ReactiveDatabase', () => {
 
     it('uses the last duplicate assignment and retains earlier invalidations', () => {
       const atom = new Atom(0)
-      const dependent = () => spy(value, atom) + 1
+      const dependent = () => value(atom) + 1
       const db = emptyDatabase
       db.eval(dependent)
 
@@ -268,7 +271,7 @@ describe('ReactiveDatabase', () => {
 
     it('invalidates dependencies even when assigned values are unchanged', () => {
       const atom = new Atom(1)
-      const dependent = vi.fn(() => spy(value, atom) + 1)
+      const dependent = vi.fn(() => value(atom) + 1)
       const db = emptyDatabase
       db.eval(dependent)
 
@@ -336,11 +339,12 @@ describe('ReactiveDatabase', () => {
       recursiveCallCount++
       if (recursiveCallCount === 1) {
         // First call, trigger recursion
-        return spy(recursiveFunc, arg)
+        return memoizedRecursiveFunc(arg)
       }
       return 'result'
     }
 
+    const memoizedRecursiveFunc = memoize(recursiveFunc)
     const recursiveExpr = expr(recursiveFunc, 'test')
 
     let thrown
@@ -405,9 +409,11 @@ describe('ReactiveDatabase', () => {
       (defaultLeft, defaultRight, operand, updateLeft, modify, warmGraph) => {
         const leftAtom = new Atom(defaultLeft)
         const rightAtom = new Atom(defaultRight)
-        const left = () => spyExpr(expr(value, leftAtom)) * 2
-        const right = () => spy(value, rightAtom) * 3
-        const combined = () => spy(left) + spy(right)
+        const left = () => value(leftAtom) * 2
+        const right = () => value(rightAtom) * 3
+        const memoizedLeft = memoize(left)
+        const memoizedRight = memoize(right)
+        const combined = () => memoizedLeft() + memoizedRight()
         const db = emptyDatabase
 
         // Dependencies only exist after the graph has been evaluated
@@ -447,9 +453,11 @@ describe('ReactiveDatabase', () => {
       (initialLeft, initialRight, operand, updateLeft, modify) => {
         const leftAtom = new Atom(initialLeft)
         const rightAtom = new Atom(initialRight)
-        const left = vi.fn((factor: number) => spy(value, leftAtom) * factor)
-        const right = vi.fn((factor: number) => spy(value, rightAtom) * factor)
-        const combined = vi.fn(() => spy(left, 2) + spyExpr(expr(right, 3)))
+        const left = vi.fn((factor: number) => value(leftAtom) * factor)
+        const right = vi.fn((factor: number) => value(rightAtom) * factor)
+        const memoizedLeft = memoize(left)
+        const memoizedRight = memoize(right)
+        const combined = vi.fn(() => memoizedLeft(2) + memoizedRight(3))
         const db = emptyDatabase
 
         // Warm the graph: leftAtom -> left -> combined <- right <- rightAtom
@@ -534,7 +542,7 @@ describe('ReactiveDatabase', () => {
     const db = emptyDatabase
     const base = new Atom<string | undefined>(undefined)
     const throwingFunc = vi.fn(() => {
-      const baseValue = spy(value, base)
+      const baseValue = value(base)
       if (baseValue === 'bad') {
         throw new Error('bad')
       }
@@ -571,15 +579,16 @@ describe('ReactiveDatabase', () => {
     const base = new Atom<string | undefined>(undefined)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
-      const baseValue = spy(value, base)
+      const baseValue = value(base)
       if (baseValue === 'bad') {
         throw innerError
       }
       return `inner-${baseValue}`
     })
+    const memoizedInnerFunc = memoize(innerFunc)
     const outerFunc = vi.fn(() => {
       try {
-        return `outer-${spy(innerFunc)}`
+        return `outer-${memoizedInnerFunc()}`
       } catch (err) {
         return 'outer-fallback'
       }
@@ -598,13 +607,14 @@ describe('ReactiveDatabase', () => {
     const base = new Atom<string | undefined>(undefined)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
-      const baseValue = spy(value, base)
+      const baseValue = value(base)
       if (baseValue === 'bad') {
         throw innerError
       }
       return `inner-${baseValue}`
     })
-    const outerFunc = vi.fn(() => `outer-${spy(innerFunc)}`)
+    const memoizedInnerFunc = memoize(innerFunc)
+    const outerFunc = vi.fn(() => `outer-${memoizedInnerFunc()}`)
 
     let db = rdb.with(base, 'bad')
     let caughtError

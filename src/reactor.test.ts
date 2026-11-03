@@ -3,7 +3,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
 import { expr } from './expression';
-import { spy } from './spy';
 import { Atom, value } from './atom';
 
 describe('DatabaseReactor', () => {
@@ -22,7 +21,7 @@ describe('DatabaseReactor', () => {
             const reactor = new Reactor();
             const a = new Atom(1);
             const b = new Atom(2);
-            const sum = () => spy(value, a) + spy(value, b);
+            const sum = () => value(a) + value(b);
             const callback = vi.fn(() => reactor.eval(sum));
             reactor.watch(callback, sum);
 
@@ -85,7 +84,7 @@ describe('DatabaseReactor', () => {
     it('eval tracks dependencies and recomputes after set', () => {
         const reactor = new Reactor();
         const base = new Atom(1);
-        const func = vi.fn((factor: number) => spy(value, base) * factor);
+        const func = vi.fn((factor: number) => value(base) * factor);
 
         expect(reactor.eval(func, 3)).toBe(3);
         reactor.set(base, 2);
@@ -127,7 +126,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const base = new Atom(1);
         const callback = vi.fn();
-        const func = () => spy(value, base) + 1;
+        const func = () => value(base) + 1;
 
         reactor.watch(callback, func);
         expect(callback).not.toHaveBeenCalled();
@@ -142,7 +141,7 @@ describe('DatabaseReactor', () => {
         const base = new Atom(1);
         const other = new Atom(0);
         const callback = vi.fn();
-        const func = (factor: number) => spy(value, base) * factor;
+        const func = (factor: number) => value(base) * factor;
         const unsubscribe = reactor.watch(callback, func, 3);
 
         reactor.set(other, 1);
@@ -196,7 +195,7 @@ describe('DatabaseReactor', () => {
     it('handles dependent expression notifications: notifies on change, skips duplicates without recompute, resumes after recompute', () => {
         const reactor = new Reactor();
         const base = new Atom(0);
-        const depFunc = (_arg: string) => spy(value, base) + 1;
+        const depFunc = (_arg: string) => value(base) + 1;
         // Set up base value and create dependency
         reactor.set(base, 10);
         expect(reactor.eval(depFunc, 'key')).toBe(11);
@@ -220,7 +219,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const base = new Atom(0);
         const callback = vi.fn();
-        const depFunc = (_arg: string) => spy(value, base) + 1;
+        const depFunc = (_arg: string) => value(base) + 1;
 
         reactor.set(base, 10);
         reactor.watchExpr(callback, expr(depFunc, 'key'));

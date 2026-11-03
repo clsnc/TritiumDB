@@ -5,7 +5,6 @@ import { Atom, value } from './atom'
 import { emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { expr } from './expression'
 import { memoize } from './memoize'
-import { spy, spyExpr } from './spy'
 
 describe('memoize', () => {
   it('wraps a function without evaluating it', () => {
@@ -67,19 +66,15 @@ describe('memoize', () => {
     expect(second).toHaveBeenCalledExactlyOnceWith(2)
   })
 
-  it('shares the original function cache with spy, spyExpr, and other wrappers', () => {
+  it('shares the original function cache with eval, evalExpr, and other wrappers', () => {
     const original = vi.fn((n: number) => n * 2)
     const wrapped = memoize(original)
     const anotherWrapper = memoize(original)
     const db = emptyDatabase
 
-    expect(db.eval(() => [
-      wrapped(2),
-      spy(original, 2),
-      spyExpr(expr(original, 2)),
-      anotherWrapper(2),
-    ])).toEqual([4, 4, 4, 4])
     expect(db.eval(original, 2)).toBe(4)
+    expect(db.evalExpr(expr(original, 2))).toBe(4)
+    expect(db.eval(() => [wrapped(2), anotherWrapper(2)])).toEqual([4, 4])
     expect(original).toHaveBeenCalledExactlyOnceWith(2)
   })
 
