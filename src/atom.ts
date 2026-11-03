@@ -1,3 +1,5 @@
+import { activeDatabase } from './database'
+
 export class Atom<T> {
     constructor(readonly defaultValue: T) {}
 }
@@ -8,5 +10,7 @@ export type AtomAssignments<T extends readonly unknown[]> = {
 }
 
 export function value<T>(atom: Atom<T>): T {
-    return atom.defaultValue
+    return activeDatabase === null
+        ? atom.defaultValue
+        : activeDatabase.spyAtomValue(atom)
 }

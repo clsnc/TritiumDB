@@ -1,3 +1,5 @@
+// @aiUnreviewed
+
 import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
 import { expr } from './expression';
@@ -99,6 +101,26 @@ describe('DatabaseReactor', () => {
         expect(() => reactor.eval(func)).toThrow(error);
         expect(() => reactor.eval(func)).toThrow(error);
         expect(func).toHaveBeenCalledTimes(1);
+    });
+
+    it('watches direct value reads and reevaluates them after updates', () => {
+        const reactor = new Reactor();
+        const atom = new Atom(1);
+        const other = new Atom(0);
+        const read = () => value(atom) * 2;
+        const callback = vi.fn(() => reactor.eval(read));
+        const unsubscribe = reactor.watch(callback, read);
+
+        reactor.set(other, 10);
+        expect(callback).not.toHaveBeenCalled();
+
+        reactor.set(atom, 3);
+        reactor.set(atom, 4);
+        expect(callback.mock.results.map(result => result.value)).toEqual([6, 8]);
+
+        unsubscribe();
+        reactor.set(atom, 5);
+        expect(callback).toHaveBeenCalledTimes(2);
     });
 
     it('watch accepts a function with no arguments', () => {

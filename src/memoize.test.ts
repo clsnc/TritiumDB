@@ -1,3 +1,5 @@
+// @aiUnreviewed
+
 import { describe, it, expect, vi } from 'vitest'
 import { Atom, value } from './atom'
 import { Database, RecursiveExpressionComputationError } from './database'
@@ -108,7 +110,7 @@ describe('memoize', () => {
 
   it('tracks transitive dependencies while preserving earlier snapshots', () => {
     const count = new Atom(1)
-    const original = vi.fn((factor: number) => spy(value, count) * factor)
+    const original = vi.fn((factor: number) => value(count) * factor)
     const wrapped = memoize(original)
     const outerOriginal = vi.fn(() => wrapped(2) + 1)
     const outer = memoize(outerOriginal)
@@ -127,7 +129,7 @@ describe('memoize', () => {
     const shouldThrow = new Atom(true)
     const error = new Error('boom')
     const original = vi.fn(() => {
-      if (spy(value, shouldThrow)) throw error
+      if (value(shouldThrow)) throw error
       return 'recovered'
     })
     const wrapped = memoize(original)

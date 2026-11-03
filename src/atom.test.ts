@@ -1,3 +1,5 @@
+// @aiUnreviewed
+
 import { describe, it, expect, vi } from 'vitest'
 import { Database } from './database'
 import { spy, spyExpr } from './spy'
@@ -5,6 +7,77 @@ import { expr } from './expression'
 import { Atom, value } from './atom'
 
 describe('Atom', () => {
+  describe('direct value reads', () => {
+    it('returns the default outside evaluation, including after an overridden read', () => {
+      const atom = new Atom('default')
+      const db = new Database().with(atom, 'assigned')
+
+      expect(value(atom)).toBe('default')
+      expect(db.eval(() => value(atom))).toBe('assigned')
+      expect(value(atom)).toBe('default')
+    })
+
+    it('reads and tracks atoms through nested ordinary helpers', () => {
+      const atom = new Atom(1)
+      const multiply = (factor: number) => value(atom) * factor
+      const triple = vi.fn(() => multiply(3))
+      const db = new Database().with(atom, 2)
+
+      expect(db.eval(triple)).toBe(6)
+      expect(db.eval(triple)).toBe(6)
+      expect(triple).toHaveBeenCalledTimes(1)
+
+      const [nextDb, affected] = db.withGetAffectedRels(atom, 4)
+      expect(affected.size).toBe(2)
+      expect(affected.has(expr(value, atom))).toBe(true)
+      expect(affected.has(expr(triple))).toBe(true)
+      expect(nextDb.eval(triple)).toBe(12)
+      expect(db.eval(triple)).toBe(6)
+      expect(triple).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns explicit undefined assignments instead of the default', () => {
+      const atom = new Atom<string | undefined>('default')
+      const db = new Database().with(atom, undefined)
+
+      expect(db.eval(() => value(atom))).toBeUndefined()
+      expect(value(atom)).toBe('default')
+    })
+
+    it('restores and tracks the outer database after a nested evaluation', () => {
+      const atom = new Atom('default')
+      const outerDb = new Database().with(atom, 'outer')
+      const innerDb = new Database().with(atom, 'inner')
+      const readInner = () => value(atom)
+      const read = vi.fn(() => `${innerDb.eval(readInner)}+${value(atom)}`)
+
+      expect(outerDb.eval(read)).toBe('inner+outer')
+      expect(outerDb.with(atom, 'updated').eval(read)).toBe('inner+updated')
+      expect(read).toHaveBeenCalledTimes(2)
+      expect(value(atom)).toBe('default')
+    })
+
+    it('restores database context after nested and outer evaluations throw', () => {
+      const atom = new Atom('default')
+      const outerDb = new Database().with(atom, 'outer')
+      const innerDb = new Database().with(atom, 'inner')
+      const error = new Error('boom')
+      const throwing = () => {
+        expect(value(atom)).toBe('inner')
+        throw error
+      }
+
+      expect(outerDb.eval(() => {
+        expect(() => innerDb.eval(throwing)).toThrow(error)
+        return value(atom)
+      })).toBe('outer')
+      expect(value(atom)).toBe('default')
+
+      expect(() => innerDb.eval(throwing)).toThrow(error)
+      expect(value(atom)).toBe('default')
+    })
+  })
+
   it('returns the default value when no override is set', () => {
     const db = new Database()
     const v = new Atom('anonymous')
