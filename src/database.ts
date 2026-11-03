@@ -144,6 +144,12 @@ export class Database {
         return atom.defaultValue
     }
 
+    /** @internal Reads an atom's value and tracks it as a dependency of the computing expression. */
+    spyAtomValue<T>(atom: Atom<T>): T {
+        this.addDependencyToComputingExpression(expr(value, atom))
+        return this.getAtomValue(atom)
+    }
+
     protected setAtomValueGetAffectedExprs<T>(atom: Atom<T>, nextValue: T): ImmSet<Expression> {
         const atomExpr = expr(value, atom)
         let affectedExprs = this.getAllDependentExprsIncludingSeed(atomExpr)

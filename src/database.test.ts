@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import fc from 'fast-check'
 import { Map as ImmMap } from 'immutable'
-import { Database, RecursiveExpressionComputationError } from './database'
+import { activeDatabase, Database, RecursiveExpressionComputationError } from './database'
 import { spy, spyExpr } from './spy'
 import { expr, type Expression } from './expression'
 import { Atom, value } from './atom'
@@ -53,6 +53,52 @@ describe('ReactiveDatabase', () => {
       ]))
 
       expect(() => db.getAtomValue(atom)).toThrow(error)
+    })
+  })
+
+  describe('spyAtomValue', () => {
+    it('reads defaults and assignments outside a computation', () => {
+      const atom = new Atom<string | undefined>('default')
+      const db = new Database()
+
+      expect(db.spyAtomValue(atom)).toBe('default')
+      expect(db.with(atom, 'assigned').spyAtomValue(atom)).toBe('assigned')
+      expect(db.with(atom, undefined).spyAtomValue(atom)).toBeUndefined()
+      expect(db.spyAtomValue(atom)).toBe('default')
+    })
+
+    it('tracks reads so dependent results are invalidated across snapshots', () => {
+      const atom = new Atom(1)
+      const db = new Database()
+      const read = vi.fn(() => activeDatabase!.spyAtomValue(atom) * 2)
+
+      expect(db.eval(read)).toBe(2)
+      const [nextDb, affected] = db.withGetAffectedRels(atom, 10)
+
+      expect(affected.size).toBe(2)
+      expect(affected.has(expr(value, atom))).toBe(true)
+      expect(affected.has(expr(read))).toBe(true)
+      expect(nextDb.eval(read)).toBe(20)
+      expect(db.eval(read)).toBe(2)
+      expect(read).toHaveBeenCalledTimes(2)
+    })
+
+    it('tracks a dependency before rethrowing a cached exception', () => {
+      const atom = new Atom(0)
+      const error = new Error('cached exception')
+      const db = new Database(ImmMap([
+        [expr(value, atom), { value: error, isReturnValue: false }],
+      ]))
+      const read = vi.fn(() => activeDatabase!.spyAtomValue(atom))
+
+      expect(() => db.eval(read)).toThrow(error)
+      expect(() => db.eval(read)).toThrow(error)
+      expect(read).toHaveBeenCalledTimes(1)
+
+      const nextDb = db.with(atom, 42)
+      expect(nextDb.eval(read)).toBe(42)
+      expect(() => db.eval(read)).toThrow(error)
+      expect(read).toHaveBeenCalledTimes(2)
     })
   })
 

@@ -17,6 +17,13 @@ describe('Database atom read types', () => {
     expectTypeOf(db.getAtomValue(new Atom<string | undefined>(undefined)))
       .toEqualTypeOf<string | undefined>()
   })
+
+  it('preserves the Atom value type when tracking reads', () => {
+    expectTypeOf(db.spyAtomValue(count)).toEqualTypeOf<number>()
+    expectTypeOf(db.spyAtomValue(name)).toEqualTypeOf<string>()
+    expectTypeOf(db.spyAtomValue(new Atom<string | undefined>(undefined)))
+      .toEqualTypeOf<string | undefined>()
+  })
 })
 
 describe('Database batch assignment types', () => {
