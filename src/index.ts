@@ -1,5 +1,4 @@
 export { Database, emptyDatabase } from './database'
-export { spy, spyExpr } from './spy'
 export { memoize } from './memoize'
 export { Expression, expr } from './expression'
 export { Reactor } from './reactor'
