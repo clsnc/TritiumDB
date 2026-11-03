@@ -131,16 +131,17 @@ export class Database {
         this.currentDeepestComputingExpr = expr
     }
 
-    protected setResultGetAffectedExprs(expr: Expression, result: ExpressionResult): ImmSet<Expression> {
-        let affectedExprs = this.getAllDependentExprsIncludingSeed(expr)
+    protected setAtomValueGetAffectedExprs<T>(atom: Atom<T>, nextValue: T): ImmSet<Expression> {
+        const atomExpr = expr(value, atom)
+        let affectedExprs = this.getAllDependentExprsIncludingSeed(atomExpr)
 
         // Invalidate all affected expressions
         affectedExprs.forEach(affectedExpr => {
             this.invalidateSingleExprResult(affectedExpr)
         })
 
-        // Set the result in the cache
-        this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
+        // Store the atom value in the cache
+        this.exprToCachedResult = this.exprToCachedResult.set(atomExpr, new ExpressionResult(nextValue, true))
 
         return affectedExprs
     }
@@ -219,7 +220,7 @@ export class Database {
         )
 
         // Apply the change to the new database and get expressions that have been invalidated because of it
-        const affectedRels = newDb.setResultGetAffectedExprs(expr(value, atom), new ExpressionResult(nextValue, true))
+        const affectedRels = newDb.setAtomValueGetAffectedExprs(atom, nextValue)
 
         return [newDb, affectedRels]
     }
@@ -244,7 +245,7 @@ export class Database {
         // Apply the assignments to the new Database and collect the invalidated expressions
         let affectedExprs = ImmSet<Expression>()
         for (const [atom, nextValue] of assignments) {
-            affectedExprs = affectedExprs.union(newDb.setResultGetAffectedExprs(expr(value, atom), new ExpressionResult(nextValue, true)))
+            affectedExprs = affectedExprs.union(newDb.setAtomValueGetAffectedExprs(atom, nextValue))
         }
 
         return [newDb, affectedExprs]
