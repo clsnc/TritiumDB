@@ -29,10 +29,10 @@ export class Database {
     protected exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>>
 
     constructor(
-        atomToValue: ImmMap<Atom<unknown>, unknown> = ImmMap<Atom<unknown>, unknown>(),
-        exprToCachedResult: ImmMap<Expression, ExpressionResult> = ImmMap<Expression, ExpressionResult>(),
-        exprToContributorExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>(),
-        exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>()
+        atomToValue: ImmMap<Atom<unknown>, unknown>,
+        exprToCachedResult: ImmMap<Expression, ExpressionResult>,
+        exprToContributorExprs: ImmMap<Expression, ImmSet<Expression>>,
+        exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>>
     ) {
         this.atomToValue = atomToValue
         this.currentlyComputingExprs = ImmSet<Expression>()
@@ -284,4 +284,4 @@ export class Database {
 }
 
 /** A database with only default atom values. */
-export const emptyDatabase = new Database()
+export const emptyDatabase = new Database(ImmMap(), ImmMap(), ImmMap(), ImmMap())

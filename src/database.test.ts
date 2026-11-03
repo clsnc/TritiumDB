@@ -48,9 +48,9 @@ describe('ReactiveDatabase', () => {
     it('does not treat expression-cache entries as atom assignments', () => {
       const atom = new Atom(0)
       const error = new Error('cached exception')
-      const db = new Database(undefined, ImmMap([
+      const db = new Database(ImmMap(), ImmMap([
         [expr(value, atom), { value: error, isReturnValue: false }],
-      ]))
+      ]), ImmMap(), ImmMap())
 
       expect(db.getAtomValue(atom)).toBe(0)
     })
@@ -103,6 +103,10 @@ describe('ReactiveDatabase', () => {
 
   describe('addDependencyToComputingExpression', () => {
     class TestDatabase extends Database {
+      constructor() {
+        super(ImmMap(), ImmMap(), ImmMap(), ImmMap())
+      }
+
       override addDependencyToComputingExpression(expression: Expression): void {
         super.addDependencyToComputingExpression(expression)
       }
@@ -146,6 +150,10 @@ describe('ReactiveDatabase', () => {
 
   describe('atom storage', () => {
     class TestDatabase extends Database {
+      constructor() {
+        super(ImmMap(), ImmMap(), ImmMap(), ImmMap())
+      }
+
       override setAtomValueGetAffectedExprs<T>(atom: Atom<T>, nextValue: T) {
         return super.setAtomValueGetAffectedExprs(atom, nextValue)
       }

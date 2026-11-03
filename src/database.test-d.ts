@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { Set as ImmSet } from 'immutable'
+import { Map as ImmMap, Set as ImmSet } from 'immutable'
 import { Atom } from './atom'
 import { Database, emptyDatabase } from './index'
 import { Expression } from './expression'
@@ -13,6 +13,20 @@ const name = new Atom('')
 describe('Database exports', () => {
   it('exports emptyDatabase as a Database', () => {
     expectTypeOf(emptyDatabase).toEqualTypeOf<Database>()
+  })
+})
+
+describe('Database constructor', () => {
+  it('requires all four internal maps', () => {
+    expectTypeOf(new Database(ImmMap(), ImmMap(), ImmMap(), ImmMap()))
+      .toEqualTypeOf<Database>()
+
+    // @ts-expect-error Use emptyDatabase instead of a no-argument constructor.
+    new Database()
+    // @ts-expect-error All four maps are required.
+    new Database(ImmMap(), ImmMap(), ImmMap())
+    // @ts-expect-error Undefined cannot replace an explicit map.
+    new Database(undefined, ImmMap(), ImmMap(), ImmMap())
   })
 })
 
