@@ -131,6 +131,19 @@ export class Database {
         this.currentDeepestComputingExpr = expr
     }
 
+    /** Reads an atom's value in the database. */
+    getAtomValue<T>(atom: Atom<T>): T {
+        const cachedResult = this.exprToCachedResult.get(expr(value, atom))
+        if (cachedResult) {
+            if (cachedResult.isReturnValue) {
+                return cachedResult.value
+            }
+            throw cachedResult.value
+        }
+
+        return atom.defaultValue
+    }
+
     protected setAtomValueGetAffectedExprs<T>(atom: Atom<T>, nextValue: T): ImmSet<Expression> {
         const atomExpr = expr(value, atom)
         let affectedExprs = this.getAllDependentExprsIncludingSeed(atomExpr)

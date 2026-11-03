@@ -1,3 +1,5 @@
+// @aiUnreviewed
+
 import { describe, expectTypeOf, it } from 'vitest'
 import { Set as ImmSet } from 'immutable'
 import { Atom } from './atom'
@@ -7,6 +9,15 @@ import { Expression } from './expression'
 const db = new Database()
 const count = new Atom(0)
 const name = new Atom('')
+
+describe('Database atom read types', () => {
+  it('returns the Atom value type', () => {
+    expectTypeOf(db.getAtomValue(count)).toEqualTypeOf<number>()
+    expectTypeOf(db.getAtomValue(name)).toEqualTypeOf<string>()
+    expectTypeOf(db.getAtomValue(new Atom<string | undefined>(undefined)))
+      .toEqualTypeOf<string | undefined>()
+  })
+})
 
 describe('Database batch assignment types', () => {
   it('accepts heterogeneous assignments and returns a Database', () => {

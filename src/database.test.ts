@@ -1,11 +1,61 @@
+// @aiUnreviewed
+
 import { describe, it, expect, vi } from 'vitest'
 import fc from 'fast-check'
+import { Map as ImmMap } from 'immutable'
 import { Database, RecursiveExpressionComputationError } from './database'
 import { spy, spyExpr } from './spy'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 
 describe('ReactiveDatabase', () => {
+  describe('getAtomValue', () => {
+    it('returns the default before and after an evaluation', () => {
+      const atom = new Atom('default')
+      const db = new Database()
+
+      expect(db.getAtomValue(atom)).toBe('default')
+      db.eval(value, atom)
+      expect(db.getAtomValue(atom)).toBe('default')
+    })
+
+    it('returns assignments without changing earlier snapshots or other atoms', () => {
+      const atom = new Atom('default')
+      const other = new Atom('default')
+      const db = new Database()
+      const nextDb = db.with(atom, 'assigned')
+
+      expect(nextDb.getAtomValue(atom)).toBe('assigned')
+      expect(nextDb.getAtomValue(other)).toBe('default')
+      expect(db.getAtomValue(atom)).toBe('default')
+    })
+
+    it('returns an explicit undefined assignment instead of the default', () => {
+      const atom = new Atom<string | undefined>('default')
+      const db = new Database().with(atom, undefined)
+
+      expect(db.getAtomValue(atom)).toBeUndefined()
+    })
+
+    it('returns Error objects assigned as values', () => {
+      const atom = new Atom<Error | null>(null)
+      const error = new Error('value')
+      const db = new Database().with(atom, error)
+
+      expect(db.getAtomValue(atom)).toBe(error)
+    })
+
+    it('rethrows a cached exception', () => {
+      const atom = new Atom(0)
+      const error = new Error('cached exception')
+      const db = new Database(ImmMap([
+        [expr(value, atom), { value: error, isReturnValue: false }],
+      ]))
+
+      expect(() => db.getAtomValue(atom)).toThrow(error)
+    })
+  })
+
   describe('batch assignments', () => {
     it('sets heterogeneous readonly assignments without changing the original snapshot', () => {
       const count = new Atom(0)
