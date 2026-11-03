@@ -45,14 +45,14 @@ describe('ReactiveDatabase', () => {
       expect(db.getAtomValue(atom)).toBe(error)
     })
 
-    it('rethrows a cached exception', () => {
+    it('does not treat expression-cache entries as atom assignments', () => {
       const atom = new Atom(0)
       const error = new Error('cached exception')
-      const db = new Database(ImmMap([
+      const db = new Database(undefined, ImmMap([
         [expr(value, atom), { value: error, isReturnValue: false }],
       ]))
 
-      expect(() => db.getAtomValue(atom)).toThrow(error)
+      expect(db.getAtomValue(atom)).toBe(0)
     })
   })
 
@@ -83,12 +83,11 @@ describe('ReactiveDatabase', () => {
       expect(read).toHaveBeenCalledTimes(2)
     })
 
-    it('tracks a dependency before rethrowing a cached exception', () => {
+    it('tracks a dependency before a read throws', () => {
       const atom = new Atom(0)
-      const error = new Error('cached exception')
-      const db = new Database(ImmMap([
-        [expr(value, atom), { value: error, isReturnValue: false }],
-      ]))
+      const error = new Error('read failed')
+      const db = new Database()
+      vi.spyOn(db, 'getAtomValue').mockImplementation(() => { throw error })
       const read = vi.fn(() => activeDatabase!.spyAtomValue(atom))
 
       expect(() => db.eval(read)).toThrow(error)
@@ -142,6 +141,59 @@ describe('ReactiveDatabase', () => {
       expect(affected.has(atomExpr)).toBe(true)
       expect(affected.has(expr(dependent))).toBe(true)
       expect(dependent).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('atom storage', () => {
+    class TestDatabase extends Database {
+      override setAtomValueGetAffectedExprs<T>(atom: Atom<T>, nextValue: T) {
+        return super.setAtomValueGetAffectedExprs(atom, nextValue)
+      }
+
+      clearComputationCache(): void {
+        this.exprToCachedResult = this.exprToCachedResult.clear()
+      }
+
+      get computationCacheSize(): number {
+        return this.exprToCachedResult.size
+      }
+    }
+
+    it('stores assignments without populating the computation cache', () => {
+      const atom = new Atom(0)
+      const optional = new Atom<string | undefined>('default')
+      const db = new TestDatabase()
+
+      db.setAtomValueGetAffectedExprs(atom, 42)
+      db.setAtomValueGetAffectedExprs(optional, undefined)
+
+      expect(db.getAtomValue(atom)).toBe(42)
+      expect(db.getAtomValue(optional)).toBeUndefined()
+      expect(db.computationCacheSize).toBe(0)
+    })
+
+    it('preserves assignments when cached computation results are discarded', () => {
+      const atom = new Atom(0)
+      const optional = new Atom<string | undefined>('default')
+      const db = new TestDatabase()
+      db.setAtomValueGetAffectedExprs(atom, 42)
+      db.setAtomValueGetAffectedExprs(optional, undefined)
+      const read = vi.fn(() => value(atom))
+
+      expect(db.eval(value, atom)).toBe(42)
+      expect(db.eval(value, optional)).toBeUndefined()
+      expect(db.eval(read)).toBe(42)
+      expect(db.computationCacheSize).toBeGreaterThan(0)
+
+      db.clearComputationCache()
+
+      expect(db.computationCacheSize).toBe(0)
+      expect(db.getAtomValue(atom)).toBe(42)
+      expect(db.getAtomValue(optional)).toBeUndefined()
+      expect(db.eval(value, atom)).toBe(42)
+      expect(db.eval(value, optional)).toBeUndefined()
+      expect(db.eval(read)).toBe(42)
+      expect(read).toHaveBeenCalledTimes(2)
     })
   })
 

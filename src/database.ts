@@ -21,6 +21,7 @@ class ExpressionResult {
 export let activeDatabase: Database | null = null
 
 export class Database {
+    protected atomToValue: ImmMap<Atom<unknown>, unknown>
     protected currentlyComputingExprs: ImmSet<Expression>
     protected currentDeepestComputingExpr: Expression | null
     protected exprToCachedResult: ImmMap<Expression, ExpressionResult>
@@ -28,10 +29,12 @@ export class Database {
     protected exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>>
 
     constructor(
+        atomToValue: ImmMap<Atom<unknown>, unknown> = ImmMap<Atom<unknown>, unknown>(),
         exprToCachedResult: ImmMap<Expression, ExpressionResult> = ImmMap<Expression, ExpressionResult>(),
         exprToContributorExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>(),
         exprToDependentExprs: ImmMap<Expression, ImmSet<Expression>> = ImmMap<Expression, ImmSet<Expression>>()
     ) {
+        this.atomToValue = atomToValue
         this.currentlyComputingExprs = ImmSet<Expression>()
         this.currentDeepestComputingExpr = null
         this.exprToCachedResult = exprToCachedResult
@@ -133,15 +136,7 @@ export class Database {
 
     /** Reads an atom's value in the database. */
     getAtomValue<T>(atom: Atom<T>): T {
-        const cachedResult = this.exprToCachedResult.get(expr(value, atom))
-        if (cachedResult) {
-            if (cachedResult.isReturnValue) {
-                return cachedResult.value
-            }
-            throw cachedResult.value
-        }
-
-        return atom.defaultValue
+        return this.atomToValue.get(atom, atom.defaultValue) as T
     }
 
     /** @internal Reads an atom's value and tracks it as a dependency of the computing expression. */
@@ -159,8 +154,8 @@ export class Database {
             this.invalidateSingleExprResult(affectedExpr)
         })
 
-        // Store the atom value in the cache
-        this.exprToCachedResult = this.exprToCachedResult.set(atomExpr, new ExpressionResult(nextValue, true))
+        // Store the atom value
+        this.atomToValue = this.atomToValue.set(atom, nextValue)
 
         return affectedExprs
     }
@@ -237,6 +232,7 @@ export class Database {
     withGetAffectedRels<T>(atom: Atom<T>, nextValue: T): [Database, ImmSet<Expression>] {
         // Create a new database instance that is just like the current one
         const newDb = new Database(
+            this.atomToValue,
             this.exprToCachedResult,
             this.exprToContributorExprs,
             this.exprToDependentExprs
@@ -260,6 +256,7 @@ export class Database {
 
         // Create the new Database
         const newDb = new Database(
+            this.atomToValue,
             this.exprToCachedResult,
             this.exprToContributorExprs,
             this.exprToDependentExprs
