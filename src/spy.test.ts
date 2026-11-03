@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Database } from './database'
+import { emptyDatabase } from './database'
 import { expr } from './expression'
 import { Atom, value } from './atom'
 import { spy, spyExpr } from './spy'
@@ -23,8 +23,8 @@ describe('spyExpr', () => {
   it('computations using another database restore the active database afterwards', () => {
     const base = new Atom<string | undefined>(undefined)
     const baseExpr = expr(value, base)
-    const db1 = new Database().with(base, 'db1-value')
-    const db2 = new Database().with(base, 'db2-value')
+    const db1 = emptyDatabase.with(base, 'db1-value')
+    const db2 = emptyDatabase.with(base, 'db2-value')
 
     // A predicate on db1 that reads from db2 via a captured closure,
     // then also spies on a db1-local expression afterwards.
@@ -44,7 +44,7 @@ describe('spyExpr', () => {
   })
 
   it('restores the active database when a predicate throws', () => {
-    const db = new Database()
+    const db = emptyDatabase
     const boom = (): any => { throw new Error('boom') }
 
     expect(() => db.eval(boom)).toThrow('boom')
@@ -94,7 +94,7 @@ describe('spy', () => {
   })
 
   it('shares cached results with spyExpr for the same function and arguments', () => {
-    const db = new Database()
+    const db = emptyDatabase
     const func = vi.fn((n: number) => n * 2)
     const combined = () => [
       spy(func, 2),

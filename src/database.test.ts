@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import fc from 'fast-check'
 import { Map as ImmMap } from 'immutable'
-import { activeDatabase, Database, RecursiveExpressionComputationError } from './database'
+import { activeDatabase, Database, emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { spy, spyExpr } from './spy'
 import { expr, type Expression } from './expression'
 import { Atom, value } from './atom'
@@ -12,7 +12,7 @@ describe('ReactiveDatabase', () => {
   describe('getAtomValue', () => {
     it('returns the default before and after an evaluation', () => {
       const atom = new Atom('default')
-      const db = new Database()
+      const db = emptyDatabase
 
       expect(db.getAtomValue(atom)).toBe('default')
       db.eval(value, atom)
@@ -22,7 +22,7 @@ describe('ReactiveDatabase', () => {
     it('returns assignments without changing earlier snapshots or other atoms', () => {
       const atom = new Atom('default')
       const other = new Atom('default')
-      const db = new Database()
+      const db = emptyDatabase
       const nextDb = db.with(atom, 'assigned')
 
       expect(nextDb.getAtomValue(atom)).toBe('assigned')
@@ -32,7 +32,7 @@ describe('ReactiveDatabase', () => {
 
     it('returns an explicit undefined assignment instead of the default', () => {
       const atom = new Atom<string | undefined>('default')
-      const db = new Database().with(atom, undefined)
+      const db = emptyDatabase.with(atom, undefined)
 
       expect(db.getAtomValue(atom)).toBeUndefined()
     })
@@ -40,7 +40,7 @@ describe('ReactiveDatabase', () => {
     it('returns Error objects assigned as values', () => {
       const atom = new Atom<Error | null>(null)
       const error = new Error('value')
-      const db = new Database().with(atom, error)
+      const db = emptyDatabase.with(atom, error)
 
       expect(db.getAtomValue(atom)).toBe(error)
     })
@@ -59,7 +59,7 @@ describe('ReactiveDatabase', () => {
   describe('spyAtomValue', () => {
     it('reads defaults and assignments outside a computation', () => {
       const atom = new Atom<string | undefined>('default')
-      const db = new Database()
+      const db = emptyDatabase
 
       expect(db.spyAtomValue(atom)).toBe('default')
       expect(db.with(atom, 'assigned').spyAtomValue(atom)).toBe('assigned')
@@ -69,7 +69,7 @@ describe('ReactiveDatabase', () => {
 
     it('tracks reads so dependent results are invalidated across snapshots', () => {
       const atom = new Atom(1)
-      const db = new Database()
+      const db = emptyDatabase
       const read = vi.fn(() => activeDatabase!.spyAtomValue(atom) * 2)
 
       expect(db.eval(read)).toBe(2)
@@ -86,7 +86,7 @@ describe('ReactiveDatabase', () => {
     it('tracks a dependency before a read throws', () => {
       const atom = new Atom(0)
       const error = new Error('read failed')
-      const db = new Database()
+      const db = emptyDatabase.with(atom, 0)
       vi.spyOn(db, 'getAtomValue').mockImplementation(() => { throw error })
       const read = vi.fn(() => activeDatabase!.spyAtomValue(atom))
 
@@ -201,7 +201,7 @@ describe('ReactiveDatabase', () => {
     it('sets heterogeneous readonly assignments without changing the original snapshot', () => {
       const count = new Atom(0)
       const name = new Atom('default')
-      const db = new Database().with(count, 1).with(name, 'before')
+      const db = emptyDatabase.with(count, 1).with(name, 'before')
       const assignments = [[count, 10], [name, 'after']] as const
       const nextDb = db.withMany(...assignments)
 
@@ -221,7 +221,7 @@ describe('ReactiveDatabase', () => {
       const shared = vi.fn(() => spy(left) + spy(right))
       const transitive = vi.fn(() => spy(shared) + 1)
       const unrelated = vi.fn(() => spy(value, other))
-      const db = new Database()
+      const db = emptyDatabase
       expect(db.eval(transitive)).toBe(9)
       expect(db.eval(unrelated)).toBe(3)
 
@@ -246,7 +246,7 @@ describe('ReactiveDatabase', () => {
     it('uses the last duplicate assignment and retains earlier invalidations', () => {
       const atom = new Atom(0)
       const dependent = () => spy(value, atom) + 1
-      const db = new Database()
+      const db = emptyDatabase
       db.eval(dependent)
 
       const [nextDb, affected] = db.withManyGetAffectedRels([atom, 10], [atom, 20])
@@ -261,7 +261,7 @@ describe('ReactiveDatabase', () => {
     it('invalidates dependencies even when assigned values are unchanged', () => {
       const atom = new Atom(1)
       const dependent = vi.fn(() => spy(value, atom) + 1)
-      const db = new Database()
+      const db = emptyDatabase
       db.eval(dependent)
 
       const [nextDb, affected] = db.withManyGetAffectedRels([atom, 1])
@@ -273,7 +273,7 @@ describe('ReactiveDatabase', () => {
     })
 
     it('returns the original snapshot and no invalidations for an empty batch', () => {
-      const db = new Database()
+      const db = emptyDatabase
       const [nextDb, affected] = db.withManyGetAffectedRels()
       expect(nextDb).toBe(db)
       expect(affected.size).toBe(0)
@@ -282,13 +282,13 @@ describe('ReactiveDatabase', () => {
   })
 
   it('eval accepts a function with no arguments', () => {
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(() => 'result')).toBe('result')
   })
 
   it('eval delegates to evalExpr and shares its cache', () => {
-    const db = new Database()
+    const db = emptyDatabase.with(new Atom(0), 0)
     const func = vi.fn((label: string, count: number) => `${label}-${count}`)
     const evalExpr = vi.spyOn(db, 'evalExpr')
 
@@ -301,7 +301,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('eval propagates and caches errors', () => {
-    const db = new Database()
+    const db = emptyDatabase
     const error = new Error('boom')
     const func = vi.fn(() => { throw error })
 
@@ -311,7 +311,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('computes result for function predicates', () => {
-    const rdb = new Database()
+    const rdb = emptyDatabase
     const func = vi.fn((arg) => `computed-${arg}`)
     const e = expr(func, 'test-arg')
 
@@ -321,7 +321,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('throws RecursiveExpressionComputationError for recursive computation of the same expression', () => {
-    const rdb = new Database()
+    const rdb = emptyDatabase
     let recursiveCallCount = 0
 
     const recursiveFunc = (arg: string): string => {
@@ -358,7 +358,7 @@ describe('ReactiveDatabase', () => {
     fc.assert(
       fc.property(atomValue, fc.array(update), (defaultValue, updates) => {
         const atom = new Atom<string | undefined>(defaultValue)
-        let db = new Database()
+        let db = emptyDatabase
         let expectedValue = defaultValue
         const snapshots: [Database, string | undefined][] = [[db, expectedValue]]
 
@@ -400,7 +400,7 @@ describe('ReactiveDatabase', () => {
         const left = () => spyExpr(expr(value, leftAtom)) * 2
         const right = () => spy(value, rightAtom) * 3
         const combined = () => spy(left) + spy(right)
-        const db = new Database()
+        const db = emptyDatabase
 
         // Dependencies only exist after the graph has been evaluated
         if (warmGraph) {
@@ -442,7 +442,7 @@ describe('ReactiveDatabase', () => {
         const left = vi.fn((factor: number) => spy(value, leftAtom) * factor)
         const right = vi.fn((factor: number) => spy(value, rightAtom) * factor)
         const combined = vi.fn(() => spy(left, 2) + spyExpr(expr(right, 3)))
-        const db = new Database()
+        const db = emptyDatabase
 
         // Warm the graph: leftAtom -> left -> combined <- right <- rightAtom
         expect(db.eval(combined)).toBe(initialLeft * 2 + initialRight * 3)
@@ -485,7 +485,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('handles function expressions with multiple arguments', () => {
-    const rdb = new Database()
+    const rdb = emptyDatabase
     const func = vi.fn((arg1, arg2, arg3) => `${arg1}-${arg2}-${arg3}`)
     const e = expr(func, 'a', 'b', 'c')
 
@@ -495,7 +495,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('caches and rethrows the same error instance', () => {
-    const db = new Database()
+    const db = emptyDatabase
     const throwingFunc = vi.fn(() => {
       throw new Error('boom')
     })
@@ -523,7 +523,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('invalidates cached errors when dependencies change', () => {
-    const db = new Database()
+    const db = emptyDatabase
     const base = new Atom<string | undefined>(undefined)
     const throwingFunc = vi.fn(() => {
       const baseValue = spy(value, base)
@@ -559,7 +559,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('allows dependent predicates to catch errors', () => {
-    const db = new Database()
+    const db = emptyDatabase
     const base = new Atom<string | undefined>(undefined)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
@@ -586,7 +586,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('propagates errors through dependent expressions', () => {
-    const rdb = new Database()
+    const rdb = emptyDatabase
     const base = new Atom<string | undefined>(undefined)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {

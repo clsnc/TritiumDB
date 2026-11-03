@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { Atom, value } from './atom'
-import { Database, RecursiveExpressionComputationError } from './database'
+import { emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { expr } from './expression'
 import { memoize } from './memoize'
 import { spy, spyExpr } from './spy'
@@ -30,7 +30,7 @@ describe('memoize', () => {
     let calls = 0
     const original = vi.fn(() => ++calls)
     const wrapped = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(wrapped()).toBe(1)
     expect(wrapped()).toBe(2)
@@ -43,7 +43,7 @@ describe('memoize', () => {
   it('caches nested calls by their arguments', () => {
     const original = vi.fn((n: number) => n * 2)
     const wrapped = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(() => [wrapped(2), wrapped(2), wrapped(3)]))
       .toEqual([4, 4, 6])
@@ -59,7 +59,7 @@ describe('memoize', () => {
     const second = vi.fn((n: number) => n * 3)
     const wrappedFirst = memoize(first)
     const wrappedSecond = memoize(second)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(() => [wrappedFirst(2), wrappedSecond(2), wrappedFirst(2)]))
       .toEqual([4, 6, 4])
@@ -71,7 +71,7 @@ describe('memoize', () => {
     const original = vi.fn((n: number) => n * 2)
     const wrapped = memoize(original)
     const anotherWrapper = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(() => [
       wrapped(2),
@@ -86,7 +86,7 @@ describe('memoize', () => {
   it('works as a direct eval and evalExpr target without false recursion', () => {
     const original = vi.fn((n: number) => n * 2)
     const wrapped = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(wrapped, 2)).toBe(4)
     expect(db.evalExpr(expr(wrapped, 2))).toBe(4)
@@ -97,8 +97,10 @@ describe('memoize', () => {
   it('keeps caches scoped to each database', () => {
     const original = vi.fn(() => ({}))
     const wrapped = memoize(original)
-    const firstDb = new Database()
-    const secondDb = new Database()
+    const atom = new Atom(0)
+    // Create both branches before evaluating either so neither inherits this result.
+    const firstDb = emptyDatabase.with(atom, 1)
+    const secondDb = emptyDatabase.with(atom, 2)
     const firstResult = firstDb.eval(wrapped)
     const secondResult = secondDb.eval(wrapped)
 
@@ -114,7 +116,7 @@ describe('memoize', () => {
     const wrapped = memoize(original)
     const outerOriginal = vi.fn(() => wrapped(2) + 1)
     const outer = memoize(outerOriginal)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(outer)).toBe(3)
     const nextDb = db.with(count, 4)
@@ -133,7 +135,7 @@ describe('memoize', () => {
       return 'recovered'
     })
     const wrapped = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     // Catch in the root so repeated calls exercise the nested error cache.
     db.eval(() => {
@@ -159,7 +161,7 @@ describe('memoize', () => {
   it('detects genuine recursion for the original function and arguments', () => {
     const original = (n: number): number => wrapped(n)
     const wrapped = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     let thrown: unknown
     try {
@@ -175,7 +177,7 @@ describe('memoize', () => {
   it('allows recursive calls with different arguments', () => {
     const original = vi.fn((n: number): number => n === 0 ? 1 : n * factorial(n - 1))
     const factorial = memoize(original)
-    const db = new Database()
+    const db = emptyDatabase
 
     expect(db.eval(factorial, 4)).toBe(24)
     expect(db.eval(factorial, 3)).toBe(6)

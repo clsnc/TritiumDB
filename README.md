@@ -21,18 +21,17 @@ Though Atoms can be associated with non-default values, an `Atom` object itself 
 A `Database` is an immutable snapshot of application state. In other words, a given `Database` always has the same value for any given `Atom`. We can check an `Atom`'s value in a `Database` by calling `Database.eval` with the `value` function and the `Atom`. By default, a `Database` has default values for all `Atom`s.
 
 ```js
-import { Database, value } from 'tritiumdb'
+import { emptyDatabase, value } from 'tritiumdb'
 
-const defaultDb = new Database()
-console.log(defaultDb.eval(value, clickCountAtom)) // Output: 0 (clickCountAtom's default value)
+console.log(emptyDatabase.eval(value, clickCountAtom)) // Output: 0 (clickCountAtom's default value)
 ```
 
-Because `Database` instances are immutable, we must construct a new `Database` to assign a different value to an `Atom`. Notice that even after the new `oneClickDb` has been created, the `defaultDb` hasn't changed.
+Because `Database` instances are immutable, we must construct a new `Database` to assign a different value to an `Atom`. Notice that even after the new `oneClickDb` has been created, `emptyDatabase` hasn't changed.
 
 ```js
-const oneClickDb = defaultDb.with(clickCountAtom, 1)
+const oneClickDb = emptyDatabase.with(clickCountAtom, 1)
 console.log(oneClickDb.eval(value, clickCountAtom)) // Output: 1
-console.log(defaultDb.eval(value, clickCountAtom)) // Output: 0 (defaultDb hasn't changed)
+console.log(emptyDatabase.eval(value, clickCountAtom)) // Output: 0 (emptyDatabase hasn't changed)
 ```
 
 A `Database` can also evaluate functions that use its `Atom` values.
@@ -43,7 +42,7 @@ function multiplyClicks(multiplier) {
   return numClicks * multiplier
 }
 
-console.log(defaultDb.eval(multiplyClicks, 5)) // Output: 0
+console.log(emptyDatabase.eval(multiplyClicks, 5)) // Output: 0
 console.log(oneClickDb.eval(multiplyClicks, 5)) // Output: 5
 ```
 
@@ -55,7 +54,7 @@ function tripleClicks() {
 }
 
 console.log(oneClickDb.eval(tripleClicks)) // Output: 3
-console.log(defaultDb.eval(tripleClicks)) // Output: 0
+console.log(emptyDatabase.eval(tripleClicks)) // Output: 0
 ```
 
 Because a `Database`'s `Atom` values never change, the result of a function evaluation in a given `Database` can be cached. You can create a cached version of your function using `memoize`. Because side effects aren't guaranteed to be repeated, you should only use pure functions in most cases.
@@ -69,9 +68,9 @@ const multiplyClicksLoudly = memoize((multiplier) => {
   return numClicks * multiplier
 })
 
-defaultDb.eval(multiplyClicksLoudly, 5) // Output: "MULTIPLYING 0 by 5!"
+emptyDatabase.eval(multiplyClicksLoudly, 5) // Output: "MULTIPLYING 0 by 5!"
 oneClickDb.eval(multiplyClicksLoudly, 5) // Output: "MULTIPLYING 1 by 5!"
-defaultDb.eval(multiplyClicksLoudly, 5) // No output because the evaluation result is cached
+emptyDatabase.eval(multiplyClicksLoudly, 5) // No output because the evaluation result is cached
 oneClickDb.eval(multiplyClicksLoudly, 5) // No output because the evaluation result is cached
 ``` 
 
@@ -82,7 +81,7 @@ A `Reactor` manages changing state. Internally, it stores a `Database` and swaps
 ```js
 import { Reactor } from 'tritiumdb'
 
-const reactor = new Reactor() // If no Database is provided at construction, a Database with default Atom values is used
+const reactor = new Reactor() // If no Database is provided, emptyDatabase is used
 console.log(reactor.eval(multiplyClicks, 8)) // Output: 0 (because clickCountAtom's default value is 0)
 ```
 

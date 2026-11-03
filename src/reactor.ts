@@ -1,5 +1,5 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
-import { Database } from './database';
+import { Database, emptyDatabase } from './database';
 import { Expression, expr } from './expression';
 import { Atom, type AtomAssignments } from './atom';
 
@@ -9,7 +9,7 @@ export class Reactor {
     private invalidatedExprsPendingSubscriberNotifications: ImmSet<Expression> = ImmSet();
 
     constructor(initialDb?: Database) {
-        this.db = initialDb || new Database();
+        this.db = initialDb ?? emptyDatabase;
     }
 
     // TODO: Add testing for this

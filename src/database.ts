@@ -282,3 +282,6 @@ export class Database {
         return this.withGetAffectedRels(atom, nextValue)
     }
 }
+
+/** A database with only default atom values. */
+export const emptyDatabase = new Database()

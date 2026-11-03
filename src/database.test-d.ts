@@ -3,12 +3,18 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { Set as ImmSet } from 'immutable'
 import { Atom } from './atom'
-import { Database } from './database'
+import { Database, emptyDatabase } from './index'
 import { Expression } from './expression'
 
-const db = new Database()
+const db = emptyDatabase
 const count = new Atom(0)
 const name = new Atom('')
+
+describe('Database exports', () => {
+  it('exports emptyDatabase as a Database', () => {
+    expectTypeOf(emptyDatabase).toEqualTypeOf<Database>()
+  })
+})
 
 describe('Database atom read types', () => {
   it('returns the Atom value type', () => {
