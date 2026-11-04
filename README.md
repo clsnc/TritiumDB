@@ -57,7 +57,7 @@ console.log(oneClickDb.eval(tripleClicks)) // Output: 3
 console.log(emptyDatabase.eval(tripleClicks)) // Output: 0
 ```
 
-Because a `Database`'s `Atom` values never change, the result of a function evaluation in a given `Database` can be cached. You can create a cached version of your function using `memoize`. Calling `memoize` repeatedly with the same function returns the same wrapper. Because side effects aren't guaranteed to be repeated, you should only use pure functions in most cases.
+Because a `Database`'s `Atom` values never change, the result of a function evaluation in a given `Database` can be cached. You can create a cached version of your function using `memoize`. Calling `memoize` repeatedly with the same function or with a memoizing wrapper returns the same wrapper. Because side effects aren't guaranteed to be repeated, you should only use pure functions in most cases.
 
 ```js
 import { memoize } from 'tritiumdb'

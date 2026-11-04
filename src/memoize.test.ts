@@ -29,6 +29,39 @@ describe('memoize', () => {
     expect(original).toHaveBeenCalledTimes(2)
   })
 
+  it('returns memoized functions unchanged without evaluating or caching calls outside a database', () => {
+    const original = vi.fn((label: string, count: number) => ({ label, count }))
+    const wrapped = memoize(original)
+    const rewrapped = memoize(wrapped)
+
+    expect(rewrapped).toBe(wrapped)
+    expect(memoize(rewrapped)).toBe(wrapped)
+    expect(original).not.toHaveBeenCalled()
+
+    const firstResult = rewrapped('item', 2)
+    const secondResult = rewrapped('item', 2)
+    expect(firstResult).toEqual({ label: 'item', count: 2 })
+    expect(secondResult).toEqual(firstResult)
+    expect(secondResult).not.toBe(firstResult)
+    expect(original).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves caching and dependency invalidation after repeated memoization', () => {
+    const count = new Atom(2)
+    const original = vi.fn((factor: number) => value(count) * factor)
+    const wrapped = memoize(original)
+    const rewrapped = memoize(memoize(wrapped))
+    const db = emptyDatabase
+
+    expect(db.eval(() => [wrapped(3), rewrapped(3)])).toEqual([6, 6])
+    expect(original).toHaveBeenCalledExactlyOnceWith(3)
+
+    const nextDb = db.with(count, 4)
+    expect(nextDb.eval(() => rewrapped(3))).toBe(12)
+    expect(db.eval(() => rewrapped(3))).toBe(6)
+    expect(original).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps wrappers separate for distinct functions with identical implementations', () => {
     const makeFunction = () => () => 42
     const first = makeFunction()
