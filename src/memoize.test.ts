@@ -16,6 +16,29 @@ describe('memoize', () => {
     expect(original).toHaveBeenCalledExactlyOnceWith()
   })
 
+  it('reuses the wrapper for the same original function without caching calls outside a database', () => {
+    const original = vi.fn(() => ({}))
+    const wrapped = memoize(original)
+
+    expect(memoize(original)).toBe(wrapped)
+    expect(original).not.toHaveBeenCalled()
+
+    const firstResult = wrapped()
+    expect(memoize(original)).toBe(wrapped)
+    expect(memoize(original)()).not.toBe(firstResult)
+    expect(original).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps wrappers separate for distinct functions with identical implementations', () => {
+    const makeFunction = () => () => 42
+    const first = makeFunction()
+    const second = makeFunction()
+
+    expect(memoize(first)).not.toBe(memoize(second))
+    expect(memoize(first)).toBe(memoize(first))
+    expect(memoize(second)).toBe(memoize(second))
+  })
+
   it('forwards multiple arguments and preserves the returned value', () => {
     const result = { label: 'result' }
     const original = vi.fn((_name: string, _count: number) => result)
@@ -66,7 +89,7 @@ describe('memoize', () => {
     expect(second).toHaveBeenCalledExactlyOnceWith(2)
   })
 
-  it('shares the original function cache with eval, evalExpr, and other wrappers', () => {
+  it('shares the original function cache with eval, evalExpr, and repeated memoize calls', () => {
     const original = vi.fn((n: number) => n * 2)
     const wrapped = memoize(original)
     const anotherWrapper = memoize(original)
