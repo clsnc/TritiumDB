@@ -175,7 +175,8 @@ export class Database {
         return this.resolveResult(expr)
     }
 
-    protected updateExprCacheAndGetResult<A extends any[], R>(expr: Expression<A, R>): R {
+    /** Executes an expression with dependency tracking. */
+    protected computeTrackedExpressionResult<A extends any[], R>(expr: Expression<A, R>): ExpressionResult {
         /* Compute the result unless we are already computing, in which case
            we throw an error, as this means we are in a recursive call */
         if (this.currentlyComputingExprs.has(expr)) {
@@ -211,16 +212,17 @@ export class Database {
         // Restore the previous calling key
         this.setDeepestComputingExpr(prevCallingKey)
 
-        // Update the cache with the result
-        this.exprToCachedResult = this.exprToCachedResult.set(expr, new ExpressionResult(result, gotReturn))
+        return new ExpressionResult(result, gotReturn)
+    }
 
-        if(gotReturn) {
-            // If there was no error, return the result
-            // @ts-expect-error gotReturn being true means that result's type is R, not unknown
-            return result
+    protected updateExprCacheAndGetResult<A extends any[], R>(expr: Expression<A, R>): R {
+        const result = this.computeTrackedExpressionResult(expr)
+        this.exprToCachedResult = this.exprToCachedResult.set(expr, result)
+
+        if(result.isReturnValue) {
+            return result.value
         } else {
-            // If there was an error, rethrow it
-            throw result
+            throw result.value
         }
     }
 

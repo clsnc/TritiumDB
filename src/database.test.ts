@@ -205,6 +205,95 @@ describe('ReactiveDatabase', () => {
     })
   })
 
+  describe('computeTrackedExpressionResult', () => {
+    class TestDatabase extends Database {
+      constructor() {
+        super(ImmMap(), ImmMap(), ImmMap(), ImmMap())
+      }
+
+      override computeTrackedExpressionResult<A extends any[], R>(expression: Expression<A, R>) {
+        return super.computeTrackedExpressionResult(expression)
+      }
+
+      get computationCacheSize(): number {
+        return this.exprToCachedResult.size
+      }
+    }
+
+    it('executes and tracks dependencies without populating the result cache', () => {
+      const db = new TestDatabase()
+      const atom = new Atom(3)
+      const read = vi.fn((factor: number) => db.spyAtomValue(atom) * factor)
+      const expression = expr(read, 2)
+
+      expect(db.computeTrackedExpressionResult(expression)).toEqual({ value: 6, isReturnValue: true })
+      expect(db.computeTrackedExpressionResult(expression)).toEqual({ value: 6, isReturnValue: true })
+      expect(read).toHaveBeenCalledTimes(2)
+      expect(db.computationCacheSize).toBe(0)
+
+      const [, affected] = db.withGetAffectedRels(atom, 4)
+      expect(affected.size).toBe(2)
+      expect(affected.has(expression)).toBe(true)
+    })
+
+    it('neither reads nor replaces an existing cached result', () => {
+      const db = new TestDatabase()
+      const read = vi.fn().mockReturnValueOnce('cached').mockReturnValueOnce('fresh')
+
+      expect(db.eval(read)).toBe('cached')
+      expect(db.computeTrackedExpressionResult(expr(read))).toEqual({ value: 'fresh', isReturnValue: true })
+      expect(db.eval(read)).toBe('cached')
+      expect(read).toHaveBeenCalledTimes(2)
+      expect(db.computationCacheSize).toBe(1)
+    })
+
+    it('captures errors without caching them and restores the surrounding tracking context', () => {
+      const db = new TestDatabase()
+      const innerAtom = new Atom(1)
+      const outerAtom = new Atom(2)
+      const unrelated = new Atom(0)
+      const error = new Error('boom')
+      const inner = vi.fn(() => {
+        value(innerAtom)
+        throw error
+      })
+      const outer = () => {
+        for (let i = 0; i < 2; i++) {
+          expect(db.computeTrackedExpressionResult(expr(inner))).toEqual({ value: error, isReturnValue: false })
+        }
+        return value(outerAtom)
+      }
+
+      expect(db.eval(outer)).toBe(2)
+      expect(inner).toHaveBeenCalledTimes(2)
+      expect(db.computationCacheSize).toBe(1)
+      expect(activeDatabase).toBeNull()
+
+      const [, innerAffected] = db.withGetAffectedRels(innerAtom, 10)
+      expect(innerAffected.has(expr(inner))).toBe(true)
+      const [, outerAffected] = db.withGetAffectedRels(outerAtom, 20)
+      expect(outerAffected.has(expr(outer))).toBe(true)
+      expect(outerAffected.has(expr(inner))).toBe(false)
+
+      db.spyAtomValue(unrelated)
+      const [, unrelatedAffected] = db.withGetAffectedRels(unrelated, 1)
+      expect(unrelatedAffected.size).toBe(1)
+    })
+
+    it('throws on recursive entry instead of capturing it as a predicate outcome', () => {
+      const db = new TestDatabase()
+      const read = () => {
+        expect(() => db.computeTrackedExpressionResult(expression)).toThrow(RecursiveExpressionComputationError)
+        return 42
+      }
+      const expression = expr(read)
+
+      expect(db.computeTrackedExpressionResult(expression)).toEqual({ value: 42, isReturnValue: true })
+      expect(db.computeTrackedExpressionResult(expression)).toEqual({ value: 42, isReturnValue: true })
+      expect(db.computationCacheSize).toBe(0)
+    })
+  })
+
   describe('batch assignments', () => {
     it('sets heterogeneous readonly assignments without changing the original snapshot', () => {
       const count = new Atom(0)
