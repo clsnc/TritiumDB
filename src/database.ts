@@ -95,18 +95,23 @@ export class Database {
     }
 
     evalExpr<A extends any[], R>(expr: Expression<A, R>): R {
-        return this.setActiveAndResolveResult(expr)
+        return this.setActiveAndComputeResult(expr)
     }
 
     eval<A extends any[], R>(pred: (...args: A) => R, ...args: A): R {
         return this.evalExpr(expr(pred, ...args))
     }
 
-    protected setActiveAndResolveResult<A extends any[], R>(expr: Expression<A, R>): R {
+    protected setActiveAndComputeResult<A extends any[], R>(expr: Expression<A, R>): R {
         const prevActiveDatabase = activeDatabase
         activeDatabase = this
         try {
-            return this.resolveResult(expr)
+            const result = this.computeTrackedExpressionResult(expr)
+            if (result.isReturnValue) {
+                return result.value
+            } else {
+                throw result.value
+            }
         } finally {
             activeDatabase = prevActiveDatabase
         }

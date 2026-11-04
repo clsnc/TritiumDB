@@ -80,7 +80,7 @@ describe('ReactiveDatabase', () => {
       expect(affected.has(expr(read))).toBe(true)
       expect(nextDb.eval(read)).toBe(20)
       expect(db.eval(read)).toBe(2)
-      expect(read).toHaveBeenCalledTimes(2)
+      expect(read).toHaveBeenCalledTimes(3)
     })
 
     it('tracks a dependency before a read throws', () => {
@@ -92,12 +92,12 @@ describe('ReactiveDatabase', () => {
 
       expect(() => db.eval(read)).toThrow(error)
       expect(() => db.eval(read)).toThrow(error)
-      expect(read).toHaveBeenCalledTimes(1)
+      expect(read).toHaveBeenCalledTimes(2)
 
       const nextDb = db.with(atom, 42)
       expect(nextDb.eval(read)).toBe(42)
       expect(() => db.eval(read)).toThrow(error)
-      expect(read).toHaveBeenCalledTimes(2)
+      expect(read).toHaveBeenCalledTimes(4)
     })
   })
 
@@ -180,7 +180,26 @@ describe('ReactiveDatabase', () => {
       expect(db.computationCacheSize).toBe(0)
     })
 
-    it('preserves assignments when cached computation results are discarded', () => {
+    it('evaluates ordinary results and errors without populating the computation cache', () => {
+      const db = new TestDatabase()
+      const atom = new Atom(3)
+      const read = vi.fn(() => ({ count: value(atom) }))
+      const first = db.eval(read)
+      const second = db.evalExpr(expr(read))
+
+      expect(first).toEqual({ count: 3 })
+      expect(second).toEqual(first)
+      expect(second).not.toBe(first)
+      expect(read).toHaveBeenCalledTimes(2)
+
+      const throwing = vi.fn(() => { throw new Error('boom') })
+      expect(() => db.eval(throwing)).toThrow('boom')
+      expect(() => db.evalExpr(expr(throwing))).toThrow('boom')
+      expect(throwing).toHaveBeenCalledTimes(2)
+      expect(db.computationCacheSize).toBe(0)
+    })
+
+    it('preserves assignments when memoized computation results are discarded', () => {
       const atom = new Atom(0)
       const optional = new Atom<string | undefined>('default')
       const db = new TestDatabase()
@@ -190,7 +209,7 @@ describe('ReactiveDatabase', () => {
 
       expect(db.eval(value, atom)).toBe(42)
       expect(db.eval(value, optional)).toBeUndefined()
-      expect(db.eval(read)).toBe(42)
+      expect(db.eval(memoize(read))).toBe(42)
       expect(db.computationCacheSize).toBeGreaterThan(0)
 
       db.clearComputationCache()
@@ -200,7 +219,7 @@ describe('ReactiveDatabase', () => {
       expect(db.getAtomValue(optional)).toBeUndefined()
       expect(db.eval(value, atom)).toBe(42)
       expect(db.eval(value, optional)).toBeUndefined()
-      expect(db.eval(read)).toBe(42)
+      expect(db.eval(memoize(read))).toBe(42)
       expect(read).toHaveBeenCalledTimes(2)
     })
   })
@@ -240,9 +259,9 @@ describe('ReactiveDatabase', () => {
       const db = new TestDatabase()
       const read = vi.fn().mockReturnValueOnce('cached').mockReturnValueOnce('fresh')
 
-      expect(db.eval(read)).toBe('cached')
+      expect(db.eval(memoize(read))).toBe('cached')
       expect(db.computeTrackedExpressionResult(expr(read))).toEqual({ value: 'fresh', isReturnValue: true })
-      expect(db.eval(read)).toBe('cached')
+      expect(db.eval(memoize(read))).toBe('cached')
       expect(read).toHaveBeenCalledTimes(2)
       expect(db.computationCacheSize).toBe(1)
     })
@@ -266,7 +285,7 @@ describe('ReactiveDatabase', () => {
 
       expect(db.eval(outer)).toBe(2)
       expect(inner).toHaveBeenCalledTimes(2)
-      expect(db.computationCacheSize).toBe(1)
+      expect(db.computationCacheSize).toBe(0)
       expect(activeDatabase).toBeNull()
 
       const [, innerAffected] = db.withGetAffectedRels(innerAtom, 10)
@@ -323,7 +342,7 @@ describe('ReactiveDatabase', () => {
       const unrelated = vi.fn(() => value(other))
       const db = emptyDatabase
       expect(db.eval(transitive)).toBe(9)
-      expect(db.eval(unrelated)).toBe(3)
+      expect(db.eval(memoize(unrelated))).toBe(3)
 
       const [nextDb, affected] = db.withManyGetAffectedRels([a, 10], [b, 20])
       const expected = [expr(value, a), expr(value, b), expr(left), expr(right), expr(shared), expr(transitive)]
@@ -335,11 +354,12 @@ describe('ReactiveDatabase', () => {
       }
 
       expect(nextDb.eval(transitive)).toBe(81)
-      expect(nextDb.eval(unrelated)).toBe(3)
+      expect(nextDb.eval(memoize(unrelated))).toBe(3)
       expect(db.eval(transitive)).toBe(9)
-      for (const computation of [left, right, shared, transitive]) {
+      for (const computation of [left, right, shared]) {
         expect(computation).toHaveBeenCalledTimes(2)
       }
+      expect(transitive).toHaveBeenCalledTimes(3)
       expect(unrelated).toHaveBeenCalledTimes(1)
     })
 
@@ -387,7 +407,7 @@ describe('ReactiveDatabase', () => {
     expect(db.eval(() => 'result')).toBe('result')
   })
 
-  it('eval delegates to evalExpr and shares its cache', () => {
+  it('eval delegates to evalExpr and executes on every call', () => {
     const db = emptyDatabase.with(new Atom(0), 0)
     const func = vi.fn((label: string, count: number) => `${label}-${count}`)
     const evalExpr = vi.spyOn(db, 'evalExpr')
@@ -397,17 +417,21 @@ describe('ReactiveDatabase', () => {
     expect(evalExpr).toHaveBeenCalledWith(expr(func, 'test', 2))
     expect(db.evalExpr(expr(func, 'test', 2))).toBe(result)
     expect(db.eval(func, 'test', 2)).toBe(result)
-    expect(func).toHaveBeenCalledExactlyOnceWith('test', 2)
+    expect(func).toHaveBeenCalledTimes(3)
+    expect(func).toHaveBeenNthCalledWith(1, 'test', 2)
+    expect(func).toHaveBeenNthCalledWith(2, 'test', 2)
+    expect(func).toHaveBeenNthCalledWith(3, 'test', 2)
   })
 
-  it('eval propagates and caches errors', () => {
+  it('eval and evalExpr propagate errors without caching them', () => {
     const db = emptyDatabase
     const error = new Error('boom')
     const func = vi.fn(() => { throw error })
 
     expect(() => db.eval(func)).toThrow(error)
+    expect(() => db.evalExpr(expr(func))).toThrow(error)
     expect(() => db.eval(func)).toThrow(error)
-    expect(func).toHaveBeenCalledTimes(1)
+    expect(func).toHaveBeenCalledTimes(3)
   })
 
   it('computes result for function predicates', () => {
@@ -547,12 +571,13 @@ describe('ReactiveDatabase', () => {
         const memoizedLeft = memoize(left)
         const memoizedRight = memoize(right)
         const combined = vi.fn(() => memoizedLeft(2) + memoizedRight(3))
+        const memoizedCombined = memoize(combined)
         const db = emptyDatabase
 
         // Warm the graph: leftAtom -> left -> combined <- right <- rightAtom
-        expect(db.eval(combined)).toBe(initialLeft * 2 + initialRight * 3)
-        expect(db.eval(left, 2)).toBe(initialLeft * 2)
-        expect(db.eval(right, 3)).toBe(initialRight * 3)
+        expect(db.eval(memoizedCombined)).toBe(initialLeft * 2 + initialRight * 3)
+        expect(db.eval(memoizedLeft, 2)).toBe(initialLeft * 2)
+        expect(db.eval(memoizedRight, 3)).toBe(initialRight * 3)
 
         // Check that internal results are being cached and reused
         for (const computation of [left, right, combined]) {
@@ -572,14 +597,14 @@ describe('ReactiveDatabase', () => {
           : db.with(atom, operand)
 
         // Check that the values in the new Database
-        expect(nextDb.eval(combined)).toBe(expectedLeft * 2 + expectedRight * 3)
-        expect(nextDb.eval(left, 2)).toBe(expectedLeft * 2)
-        expect(nextDb.eval(right, 3)).toBe(expectedRight * 3)
+        expect(nextDb.eval(memoizedCombined)).toBe(expectedLeft * 2 + expectedRight * 3)
+        expect(nextDb.eval(memoizedLeft, 2)).toBe(expectedLeft * 2)
+        expect(nextDb.eval(memoizedRight, 3)).toBe(expectedRight * 3)
 
         // Check that the old Database hasn't changed
-        expect(db.eval(combined)).toBe(initialLeft * 2 + initialRight * 3)
-        expect(db.eval(left, 2)).toBe(initialLeft * 2)
-        expect(db.eval(right, 3)).toBe(initialRight * 3)
+        expect(db.eval(memoizedCombined)).toBe(initialLeft * 2 + initialRight * 3)
+        expect(db.eval(memoizedLeft, 2)).toBe(initialLeft * 2)
+        expect(db.eval(memoizedRight, 3)).toBe(initialRight * 3)
 
         // Check that internal results in the new Database are still using the old Database's cache
         expect(left).toHaveBeenCalledTimes(updateLeft ? 2 : 1)
@@ -599,13 +624,13 @@ describe('ReactiveDatabase', () => {
     expect(func).toHaveBeenCalledWith('a', 'b', 'c')
   })
 
-  it('caches and rethrows the same error instance', () => {
+  it('memoize caches and rethrows the same error instance', () => {
     const db = emptyDatabase
     const throwingFunc = vi.fn(() => {
       throw new Error('boom')
     })
 
-    const e = expr(throwingFunc)
+    const e = expr(memoize(throwingFunc))
 
     let firstError
     try {
@@ -621,13 +646,13 @@ describe('ReactiveDatabase', () => {
       secondError = err
     }
 
-    expect(firstError instanceof Error)
+    expect(firstError).toBeInstanceOf(Error)
     expect((firstError as Error).message).toEqual('boom')
     expect(secondError).toBe(firstError)
     expect(throwingFunc).toHaveBeenCalledTimes(1)
   })
 
-  it('invalidates cached errors when dependencies change', () => {
+  it('invalidates memoized errors when dependencies change', () => {
     const db = emptyDatabase
     const base = new Atom<string | undefined>(undefined)
     const throwingFunc = vi.fn(() => {
@@ -642,14 +667,14 @@ describe('ReactiveDatabase', () => {
 
     let firstError
     try {
-      db2.eval(throwingFunc)
+      db2.eval(memoize(throwingFunc))
     } catch (err) {
       firstError = err
     }
 
     let secondError
     try {
-      db2.eval(throwingFunc)
+      db2.eval(memoize(throwingFunc))
     } catch (err) {
       secondError = err
     }
@@ -659,7 +684,7 @@ describe('ReactiveDatabase', () => {
     expect(throwingFunc).toHaveBeenCalledTimes(1)
 
     const db3 = db2.with(base, 'good')
-    expect(db3.eval(throwingFunc)).toBe('ok-good')
+    expect(db3.eval(memoize(throwingFunc))).toBe('ok-good')
     expect(throwingFunc).toHaveBeenCalledTimes(2)
   })
 

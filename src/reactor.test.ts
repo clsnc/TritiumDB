@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
 import { expr } from './expression';
 import { Atom, value } from './atom';
+import { memoize } from './memoize';
 
 describe('DatabaseReactor', () => {
     describe('setMany', () => {
@@ -68,7 +69,7 @@ describe('DatabaseReactor', () => {
         expect(reactor.eval(() => 'result')).toBe('result');
     });
 
-    it('eval delegates to evalExpr and shares its cache', () => {
+    it('eval delegates to evalExpr and executes on every call', () => {
         const reactor = new Reactor();
         const func = vi.fn((label: string, count: number) => `${label}-${count}`);
         const evalExpr = vi.spyOn(reactor, 'evalExpr');
@@ -78,7 +79,10 @@ describe('DatabaseReactor', () => {
         expect(evalExpr).toHaveBeenCalledWith(expr(func, 'test', 2));
         expect(reactor.evalExpr(expr(func, 'test', 2))).toBe(result);
         expect(reactor.eval(func, 'test', 2)).toBe(result);
-        expect(func).toHaveBeenCalledExactlyOnceWith('test', 2);
+        expect(func).toHaveBeenCalledTimes(3);
+        expect(func).toHaveBeenNthCalledWith(1, 'test', 2);
+        expect(func).toHaveBeenNthCalledWith(2, 'test', 2);
+        expect(func).toHaveBeenNthCalledWith(3, 'test', 2);
     });
 
     it('eval tracks dependencies and recomputes after set', () => {
@@ -92,14 +96,15 @@ describe('DatabaseReactor', () => {
         expect(func).toHaveBeenCalledTimes(2);
     });
 
-    it('eval propagates and caches errors', () => {
+    it('eval and evalExpr propagate errors without caching them', () => {
         const reactor = new Reactor();
         const error = new Error('boom');
         const func = vi.fn(() => { throw error });
 
         expect(() => reactor.eval(func)).toThrow(error);
+        expect(() => reactor.evalExpr(expr(func))).toThrow(error);
         expect(() => reactor.eval(func)).toThrow(error);
-        expect(func).toHaveBeenCalledTimes(1);
+        expect(func).toHaveBeenCalledTimes(3);
     });
 
     it('watches direct value reads and reevaluates them after updates', () => {
@@ -119,6 +124,27 @@ describe('DatabaseReactor', () => {
 
         unsubscribe();
         reactor.set(atom, 5);
+        expect(callback).toHaveBeenCalledTimes(2);
+    });
+
+    it('watchExpr tracks memoized cache hits and rearms after reevaluation', () => {
+        const reactor = new Reactor();
+        const count = new Atom(1);
+        const original = vi.fn(() => value(count) * 2);
+        const read = memoize(original);
+        expect(reactor.eval(read)).toBe(2);
+
+        const callback = vi.fn(() => reactor.evalExpr(expr(read)));
+        const unsubscribe = reactor.watchExpr(callback, expr(read));
+        expect(original).toHaveBeenCalledTimes(1);
+
+        reactor.set(count, 2);
+        reactor.set(count, 3);
+        expect(callback.mock.results.map(result => result.value)).toEqual([4, 6]);
+        expect(original).toHaveBeenCalledTimes(3);
+
+        unsubscribe();
+        reactor.set(count, 4);
         expect(callback).toHaveBeenCalledTimes(2);
     });
 

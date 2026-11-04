@@ -104,7 +104,7 @@ describe('spy', () => {
     ]
 
     expect(db.eval(combined)).toEqual([4, 4, 4, 6])
-    expect(db.eval(func, 2)).toBe(4)
+    expect(db.eval(() => spy(func, 2))).toBe(4)
     expect(func).toHaveBeenCalledTimes(2)
     expect(func).toHaveBeenNthCalledWith(1, 2)
     expect(func).toHaveBeenNthCalledWith(2, 3)

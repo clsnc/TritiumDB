@@ -24,7 +24,7 @@ describe('Atom', () => {
 
       expect(db.eval(triple)).toBe(6)
       expect(db.eval(triple)).toBe(6)
-      expect(triple).toHaveBeenCalledTimes(1)
+      expect(triple).toHaveBeenCalledTimes(2)
 
       const [nextDb, affected] = db.withGetAffectedRels(atom, 4)
       expect(affected.size).toBe(2)
@@ -32,7 +32,7 @@ describe('Atom', () => {
       expect(affected.has(expr(triple))).toBe(true)
       expect(nextDb.eval(triple)).toBe(12)
       expect(db.eval(triple)).toBe(6)
-      expect(triple).toHaveBeenCalledTimes(2)
+      expect(triple).toHaveBeenCalledTimes(4)
     })
 
     it('returns explicit undefined assignments instead of the default', () => {

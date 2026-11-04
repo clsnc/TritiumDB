@@ -122,16 +122,56 @@ describe('memoize', () => {
     expect(second).toHaveBeenCalledExactlyOnceWith(2)
   })
 
-  it('shares the original function cache with eval, evalExpr, and repeated memoize calls', () => {
-    const original = vi.fn((n: number) => n * 2)
+  it('keeps memoized results independent of bare eval and evalExpr calls', () => {
+    const count = new Atom(2)
+    const original = vi.fn((n: number) => ({ count: value(count) * n }))
     const wrapped = memoize(original)
     const anotherWrapper = memoize(original)
     const db = emptyDatabase
 
-    expect(db.eval(original, 2)).toBe(4)
-    expect(db.evalExpr(expr(original, 2))).toBe(4)
-    expect(db.eval(() => [wrapped(2), anotherWrapper(2)])).toEqual([4, 4])
-    expect(original).toHaveBeenCalledExactlyOnceWith(2)
+    const firstBareResult = db.eval(original, 2)
+    const secondBareResult = db.evalExpr(expr(original, 2))
+    const cachedResult = db.eval(wrapped, 2)
+    expect(cachedResult).toEqual({ count: 4 })
+    expect(secondBareResult).not.toBe(firstBareResult)
+    expect(cachedResult).not.toBe(firstBareResult)
+    expect(cachedResult).not.toBe(secondBareResult)
+    expect(db.evalExpr(expr(anotherWrapper, 2))).toBe(cachedResult)
+
+    expect(db.eval(original, 2)).not.toBe(cachedResult)
+    expect(db.evalExpr(expr(original, 2))).not.toBe(cachedResult)
+    expect(db.eval(wrapped, 2)).toBe(cachedResult)
+    expect(original).toHaveBeenCalledTimes(5)
+
+    const nextDb = db.with(count, 3)
+    expect(nextDb.eval(wrapped, 2)).toEqual({ count: 6 })
+    expect(db.eval(wrapped, 2)).toBe(cachedResult)
+    expect(original).toHaveBeenCalledTimes(6)
+  })
+
+  it('keeps memoized errors independent of bare evaluations', () => {
+    const shouldThrow = new Atom(true)
+    const original = vi.fn(() => {
+      if (value(shouldThrow)) throw new Error('boom')
+      return 'recovered'
+    })
+    const wrapped = memoize(original)
+    const db = emptyDatabase
+
+    expect(() => db.eval(original)).toThrow('boom')
+    const bareError = original.mock.results[0].value
+    expect(() => db.eval(wrapped)).toThrow('boom')
+    const cachedError = original.mock.results[1].value
+    expect(cachedError).not.toBe(bareError)
+
+    expect(() => db.evalExpr(expr(original))).toThrow('boom')
+    expect(original.mock.results[2].value).not.toBe(cachedError)
+    expect(() => db.evalExpr(expr(wrapped))).toThrow('boom')
+    expect(original).toHaveBeenCalledTimes(3)
+
+    expect(db.with(shouldThrow, false).eval(wrapped)).toBe('recovered')
+    expect(() => db.eval(wrapped)).toThrow('boom')
+    expect(original).toHaveBeenCalledTimes(4)
   })
 
   it('works as a direct eval and evalExpr target without false recursion', () => {
