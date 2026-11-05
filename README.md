@@ -9,9 +9,9 @@ TritiumDB is a functional reactive in-memory database for JavaScript and TypeScr
 An `Atom` is the basic unit from which application state is built. We are going to demonstrate an application that counts up as it is clicked, so our state must include a click count. An `Atom` must have a default value, so we set that to `0` clicks.
 
 ```js
-import { Atom } from 'tritiumdb'
+import { atom } from 'tritiumdb'
 
-const clickCountAtom = new Atom(0) // Assume 0 clicks by default
+const clickCountAtom = atom(0) // Assume 0 clicks by default
 ```
 
 Though Atoms can be associated with non-default values, an `Atom` object itself only stores its default value and will never change. We will see how to associate it with other values in the next section.

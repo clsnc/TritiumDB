@@ -3,7 +3,57 @@
 import { describe, it, expect, vi } from 'vitest'
 import { emptyDatabase } from './database'
 import { expr } from './expression'
+import { memoize } from './memoize'
 import { Atom, value } from './atom'
+import { atom } from './index'
+
+describe('atom', () => {
+  it('stores the supplied default value without copying it', () => {
+    const defaultValue = { count: 0 }
+    const count = atom(defaultValue)
+
+    expect(count.defaultValue).toBe(defaultValue)
+    expect(value(count)).toBe(defaultValue)
+  })
+
+  it('creates independent atoms even when they share a default object', () => {
+    const defaultValue = { count: 0 }
+    const first = atom(defaultValue)
+    const second = atom(defaultValue)
+    const assigned = { count: 1 }
+    const db = emptyDatabase.with(first, assigned)
+
+    expect(first).not.toBe(second)
+    expect(db.eval(value, first)).toBe(assigned)
+    expect(db.eval(value, second)).toBe(defaultValue)
+  })
+
+  it('supports undefined defaults and assignments', () => {
+    const count = atom<number | undefined>(undefined)
+
+    expect(value(count)).toBeUndefined()
+    const db = emptyDatabase.with(count, 1)
+    expect(db.eval(value, count)).toBe(1)
+    expect(db.with(count, undefined).eval(value, count)).toBeUndefined()
+  })
+
+  it('tracks dependencies and invalidates memoized results', () => {
+    const count = atom(1)
+    const read = vi.fn(() => value(count) * 2)
+    const doubled = memoize(read)
+    const db = emptyDatabase
+
+    expect(db.eval(doubled)).toBe(2)
+    expect(db.eval(doubled)).toBe(2)
+    expect(read).toHaveBeenCalledTimes(1)
+
+    const nextDb = db.with(count, 3)
+    expect(nextDb.eval(doubled)).toBe(6)
+    expect(db.eval(doubled)).toBe(2)
+    expect(value(count)).toBe(1)
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('Atom', () => {
   describe('direct value reads', () => {
