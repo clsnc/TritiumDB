@@ -1,14 +1,15 @@
 import { activeDatabase } from './database'
 
-class Atom<T> {
-    constructor(readonly defaultValue: T) {}
+export interface Atom<T> {
+    (): T
+    readonly defaultValue: T
 }
-
-export type { Atom }
 
 /** Creates an atom with the given default value. */
 export function atom<T>(defaultValue: T): Atom<T> {
-    return new Atom(defaultValue)
+    const read = (): T => value(read)
+    read.defaultValue = defaultValue
+    return read
 }
 
 // A list of [<atom>, <atomValue>] pairs
