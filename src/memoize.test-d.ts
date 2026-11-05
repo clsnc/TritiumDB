@@ -1,3 +1,5 @@
+// @aiUnreviewed
+
 import { describe, expectTypeOf, it } from 'vitest'
 import { atom, memoize, value } from './index'
 
