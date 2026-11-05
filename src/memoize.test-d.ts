@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { atom, memoize, value } from './index'
+import { atom, type Atom, memoize } from './index'
 
 describe('memoize types', () => {
   it('preserves argument and return types', () => {
@@ -65,10 +65,11 @@ describe('memoize types', () => {
   })
 
   it('preserves the generic relationship between an Atom and its value', () => {
-    const wrapped = memoize(value)
+    const readAtom = <T>(atom: Atom<T>): T => atom()
+    const wrapped = memoize(readAtom)
 
-    expectTypeOf(wrapped).toExtend<typeof value>()
-    expectTypeOf(value).toExtend<typeof wrapped>()
+    expectTypeOf(wrapped).toExtend<typeof readAtom>()
+    expectTypeOf(readAtom).toExtend<typeof wrapped>()
     expectTypeOf(wrapped(atom(0))).toEqualTypeOf<number>()
     expectTypeOf(wrapped(atom(''))).toEqualTypeOf<string>()
     expectTypeOf(wrapped(atom<string | undefined>(undefined)))

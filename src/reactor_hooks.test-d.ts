@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { atom, expr, memoize, Reactor, useEval, useEvalExpr, value } from './index'
+import { atom, expr, memoize, Reactor, useEval, useEvalExpr } from './index'
 
 const reactor = new Reactor()
 
@@ -10,10 +10,10 @@ describe('React hook types', () => {
     const count = atom(0)
     const optional = atom<string | undefined>(undefined)
 
-    expectTypeOf(useEval(reactor, value, count)).toEqualTypeOf<number>()
-    expectTypeOf(useEvalExpr(reactor, expr(value, count))).toEqualTypeOf<number>()
-    expectTypeOf(useEval(reactor, value, optional)).toEqualTypeOf<string | undefined>()
-    expectTypeOf(useEvalExpr(reactor, expr(value, optional))).toEqualTypeOf<string | undefined>()
+    expectTypeOf(useEval(reactor, count)).toEqualTypeOf<number>()
+    expectTypeOf(useEvalExpr(reactor, expr(count))).toEqualTypeOf<number>()
+    expectTypeOf(useEval(reactor, optional)).toEqualTypeOf<string | undefined>()
+    expectTypeOf(useEvalExpr(reactor, expr(optional))).toEqualTypeOf<string | undefined>()
   })
 
   it('preserves structured results and accepts memoized predicates', () => {

@@ -4,7 +4,7 @@
 import { act, createElement, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { atom, value, type Atom } from './atom'
+import { atom, type Atom } from './atom'
 import { emptyDatabase, type Database } from './database'
 import { expr, type Expression } from './expression'
 import { memoize } from './memoize'
@@ -69,7 +69,7 @@ describe.each([
   it('memoizes object-valued snapshots across reads and renders despite uncached evaluation', () => {
     const reactor = createReactor()
     const count = atom(2)
-    const select = vi.fn((factor: number) => ({ count: value(count) * factor }))
+    const select = vi.fn((factor: number) => ({ count: count() * factor }))
     expect(reactor.eval(select, 3)).not.toBe(reactor.eval(select, 3))
     select.mockClear()
 
@@ -96,7 +96,7 @@ describe.each([
     const reactor = createReactor()
     const count = atom(1)
     const unrelated = atom(0)
-    const select = vi.fn(() => ({ count: value(count) }))
+    const select = vi.fn(() => ({ count: count() }))
     let latest!: { count: number }
     const Reader = vi.fn(() => {
       latest = useSelector(reactor, select)
@@ -127,7 +127,7 @@ describe.each([
   it('checks invalidated primitive snapshots without rerendering when the selected value is unchanged', () => {
     const reactor = createReactor()
     const count = atom(0)
-    const select = vi.fn(() => value(count) % 2)
+    const select = vi.fn(() => count() % 2)
     const Reader = vi.fn(() => String(useSelector(reactor, select)))
 
     act(() => root.render(createElement(Reader)))
@@ -147,8 +147,8 @@ describe.each([
     const reactor = createReactor()
     const left = atom(1)
     const right = atom(10)
-    const select = vi.fn((atom: Atom<number>, factor: number) => ({ count: value(atom) * factor }))
-    const otherSelect = vi.fn((atom: Atom<number>, factor: number) => ({ count: value(atom) * factor + 100 }))
+    const select = vi.fn((atom: Atom<number>, factor: number) => ({ count: atom() * factor }))
+    const otherSelect = vi.fn((atom: Atom<number>, factor: number) => ({ count: atom() * factor + 100 }))
     let latest!: { count: number }
     function Reader({ atom, factor, pred }: {
       atom: Atom<number>
@@ -191,7 +191,7 @@ describe.each([
     const count = atom(0)
     const first = createReactor(emptyDatabase.with(count, 1))
     const second = createReactor(emptyDatabase.with(count, 2))
-    const select = vi.fn(() => ({ count: value(count) }))
+    const select = vi.fn(() => ({ count: count() }))
     let latest!: { count: number }
     const Reader = vi.fn(({ reactor }: { reactor: Reactor }) => {
       latest = useSelector(reactor, select)
@@ -220,7 +220,7 @@ describe.each([
   it('uses already-memoized predicates unchanged and tracks cached reads', () => {
     const reactor = createReactor()
     const count = atom(1)
-    const original = vi.fn(() => ({ count: value(count) }))
+    const original = vi.fn(() => ({ count: count() }))
     const select = memoize(original)
     const cached = reactor.eval(select)
     let latest!: { count: number }
@@ -243,7 +243,7 @@ describe.each([
     const reactor = createReactor()
     const left = atom(1)
     const right = atom(2)
-    const select = vi.fn(() => [value(left), value(right)] as const)
+    const select = vi.fn(() => [left(), right()] as const)
     const snapshots: Array<readonly [number, number]> = []
     function Reader() {
       const snapshot = useSelector(reactor, select)
@@ -267,7 +267,7 @@ describe.each([
     const useLeft = atom(true)
     const left = atom(1)
     const right = atom(10)
-    const select = vi.fn(() => ({ count: value(useLeft) ? value(left) : value(right) }))
+    const select = vi.fn(() => ({ count: useLeft() ? left() : right() }))
     function Reader() {
       return String(useSelector(reactor, select).count)
     }
@@ -287,7 +287,7 @@ describe.each([
   it('catches a store change between rendering and subscription', () => {
     const reactor = createReactor()
     const count = atom(1)
-    const select = vi.fn(() => ({ count: value(count) }))
+    const select = vi.fn(() => ({ count: count() }))
     const subscribe = reactor.watchExpr.bind(reactor)
     let changed = false
     vi.spyOn(reactor, 'watchExpr').mockImplementation((callback, expression) => {
@@ -311,7 +311,7 @@ describe.each([
   it('supports multiple StrictMode consumers and cleans up on removal and unmount', () => {
     const reactor = createReactor()
     const count = atom(1)
-    const select = vi.fn(() => ({ count: value(count) }))
+    const select = vi.fn(() => ({ count: count() }))
     function Reader({ id }: { id: string }) {
       return createElement('span', null, `${id}:${useSelector(reactor, select).count}`)
     }

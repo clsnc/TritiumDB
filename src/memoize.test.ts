@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, it, expect, vi } from 'vitest'
-import { atom as createAtom, value } from './atom'
+import { atom as createAtom } from './atom'
 import { emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { expr } from './expression'
 import { memoize } from './memoize'
@@ -48,7 +48,7 @@ describe('memoize', () => {
 
   it('preserves caching and dependency invalidation after repeated memoization', () => {
     const count = createAtom(2)
-    const original = vi.fn((factor: number) => value(count) * factor)
+    const original = vi.fn((factor: number) => count() * factor)
     const wrapped = memoize(original)
     const rewrapped = memoize(memoize(wrapped))
     const db = emptyDatabase
@@ -124,7 +124,7 @@ describe('memoize', () => {
 
   it('keeps memoized results independent of bare eval and evalExpr calls', () => {
     const count = createAtom(2)
-    const original = vi.fn((n: number) => ({ count: value(count) * n }))
+    const original = vi.fn((n: number) => ({ count: count() * n }))
     const wrapped = memoize(original)
     const anotherWrapper = memoize(original)
     const db = emptyDatabase
@@ -152,7 +152,7 @@ describe('memoize', () => {
   it('keeps memoized errors independent of bare evaluations', () => {
     const shouldThrow = createAtom(true)
     const original = vi.fn(() => {
-      if (value(shouldThrow)) throw new Error('boom')
+      if (shouldThrow()) throw new Error('boom')
       return 'recovered'
     })
     const wrapped = memoize(original)
@@ -203,7 +203,7 @@ describe('memoize', () => {
 
   it('tracks transitive dependencies while preserving earlier snapshots', () => {
     const count = createAtom(1)
-    const original = vi.fn((factor: number) => value(count) * factor)
+    const original = vi.fn((factor: number) => count() * factor)
     const wrapped = memoize(original)
     const outerOriginal = vi.fn(() => wrapped(2) + 1)
     const outer = memoize(outerOriginal)
@@ -222,7 +222,7 @@ describe('memoize', () => {
     const shouldThrow = createAtom(true)
     const error = new Error('boom')
     const original = vi.fn(() => {
-      if (value(shouldThrow)) throw error
+      if (shouldThrow()) throw error
       return 'recovered'
     })
     const wrapped = memoize(original)

@@ -10,7 +10,7 @@ describe('Atom', () => {
       const count = createAtom(defaultValue)
 
       expect(count.defaultValue).toBe(defaultValue)
-      expect(value(count)).toBe(defaultValue)
+      expect(count()).toBe(defaultValue)
     })
 
     it('creates independent atoms even when they share a default object', () => {
@@ -21,8 +21,8 @@ describe('Atom', () => {
       const db = emptyDatabase.with(first, assigned)
 
       expect(first).not.toBe(second)
-      expect(db.eval(value, first)).toBe(assigned)
-      expect(db.eval(value, second)).toBe(defaultValue)
+      expect(db.eval(first)).toBe(assigned)
+      expect(db.eval(second)).toBe(defaultValue)
     })
 
     it('preserves object and function defaults without copying or invoking them', () => {
@@ -43,12 +43,12 @@ describe('Atom', () => {
       const v1 = createAtom('same')
       const v2 = createAtom('same')
 
-      expect(expr(value, v1).equals(expr(value, v1))).toBe(true)
-      expect(expr(value, v1).equals(expr(value, v2))).toBe(false)
+      expect(expr(v1).equals(expr(v1))).toBe(true)
+      expect(expr(v1).equals(expr(v2))).toBe(false)
 
       const db2 = db.with(v1, 'overridden')
-      expect(db2.eval(value, v1)).toBe('overridden')
-      expect(db2.eval(value, v2)).toBe('same')
+      expect(db2.eval(v1)).toBe('overridden')
+      expect(db2.eval(v2)).toBe('same')
     })
   })
 
@@ -56,36 +56,18 @@ describe('Atom', () => {
     it('supports undefined defaults and assignments', () => {
       const count = createAtom<number | undefined>(undefined)
 
-      expect(value(count)).toBeUndefined()
+      expect(count()).toBeUndefined()
       const db = emptyDatabase.with(count, 1)
-      expect(db.eval(value, count)).toBe(1)
-      expect(db.with(count, undefined).eval(value, count)).toBeUndefined()
+      expect(db.eval(count)).toBe(1)
+      expect(db.with(count, undefined).eval(count)).toBeUndefined()
     })
 
-    it('reads defaults and assignments through both APIs without changing snapshots', () => {
-      const count = createAtom(0)
-      const other = createAtom(0)
-      const db = emptyDatabase.with(count, 10)
-
-      expect(typeof count).toBe('function')
-      expect(count()).toBe(0)
-      expect(db.eval(count)).toBe(10)
-      expect(db.evalExpr(expr(count))).toBe(10)
-      expect(db.eval(() => count())).toBe(10)
-      expect(db.eval(value, count)).toBe(10)
-      expect(db.eval(other)).toBe(0)
-      expect(emptyDatabase.eval(count)).toBe(0)
-      expect(count()).toBe(0)
-      expect(count.defaultValue).toBe(0)
-    })
-
-    it('returns explicit undefined assignments through both APIs instead of the default', () => {
+    it('returns explicit undefined assignments through direct and evaluated calls instead of the default', () => {
       const name = createAtom<string | undefined>('default')
       const db = emptyDatabase.with(name, undefined)
 
       expect(db.eval(name)).toBeUndefined()
       expect(db.eval(() => name())).toBeUndefined()
-      expect(db.eval(value, name)).toBeUndefined()
       expect(name()).toBe('default')
       expect(createAtom(undefined)()).toBeUndefined()
     })
@@ -94,30 +76,30 @@ describe('Atom', () => {
       const atom = createAtom('default')
       const db = emptyDatabase.with(atom, 'assigned')
 
-      expect(value(atom)).toBe('default')
-      expect(db.eval(() => value(atom))).toBe('assigned')
-      expect(value(atom)).toBe('default')
+      expect(atom()).toBe('default')
+      expect(db.eval(() => atom())).toBe('assigned')
+      expect(atom()).toBe('default')
     })
 
     it('returns explicit undefined assignments instead of the default', () => {
       const atom = createAtom<string | undefined>('default')
       const db = emptyDatabase.with(atom, undefined)
 
-      expect(db.eval(() => value(atom))).toBeUndefined()
-      expect(value(atom)).toBe('default')
+      expect(db.eval(() => atom())).toBeUndefined()
+      expect(atom()).toBe('default')
     })
 
     it('returns the default value when no override is set', () => {
       const db = emptyDatabase
       const v = createAtom('anonymous')
 
-      expect(db.eval(value, v)).toBe('anonymous')
+      expect(db.eval(v)).toBe('anonymous')
     })
 
     it('returns the default value outside a computation', () => {
       const v = createAtom('anonymous')
 
-      expect(value(v)).toBe('anonymous')
+      expect(v()).toBe('anonymous')
     })
 
     it('returns the overridden value in the derived database only', () => {
@@ -126,15 +108,15 @@ describe('Atom', () => {
 
       const db2 = db.with(v, 'colson')
 
-      expect(db2.eval(value, v)).toBe('colson')
-      expect(db.eval(value, v)).toBe('anonymous')
+      expect(db2.eval(v)).toBe('colson')
+      expect(db.eval(v)).toBe('anonymous')
     })
   })
 
   describe('dependency tracking', () => {
     it('reads and tracks atoms through nested ordinary helpers', () => {
       const atom = createAtom(1)
-      const multiply = (factor: number) => value(atom) * factor
+      const multiply = (factor: number) => atom() * factor
       const triple = vi.fn(() => multiply(3))
       const db = emptyDatabase.with(atom, 2)
 
@@ -154,7 +136,7 @@ describe('Atom', () => {
     it('uses the existing value dependency key for nested ordinary reads', () => {
       const count = createAtom(1)
       const multiply = (factor: number) => count() * factor
-      const read = () => multiply(3) + value(count)
+      const read = () => multiply(3) + count()
       const db = emptyDatabase.with(count, 2)
 
       expect(db.eval(read)).toBe(8)
@@ -170,7 +152,7 @@ describe('Atom', () => {
     it('recomputes dependent expressions when overridden', () => {
       const db = emptyDatabase
       const v = createAtom('anonymous')
-      const greetFunc = vi.fn(() => `hi ${value(v)}`)
+      const greetFunc = vi.fn(() => `hi ${v()}`)
 
       expect(db.eval(greetFunc)).toBe('hi anonymous')
       expect(greetFunc).toHaveBeenCalledTimes(1)
@@ -187,7 +169,7 @@ describe('Atom', () => {
       const db = emptyDatabase
       const first = createAtom('x')
       const second = createAtom(1)
-      const combined = () => `${value(first)}-${value(second)}`
+      const combined = () => `${first()}-${second()}`
 
       expect(db.eval(combined)).toBe('x-1')
 
@@ -201,13 +183,13 @@ describe('Atom', () => {
       const atom = createAtom('default')
       const outerDb = emptyDatabase.with(atom, 'outer')
       const innerDb = emptyDatabase.with(atom, 'inner')
-      const readInner = () => value(atom)
-      const read = vi.fn(() => `${innerDb.eval(readInner)}+${value(atom)}`)
+      const readInner = () => atom()
+      const read = vi.fn(() => `${innerDb.eval(readInner)}+${atom()}`)
 
       expect(outerDb.eval(read)).toBe('inner+outer')
       expect(outerDb.with(atom, 'updated').eval(read)).toBe('inner+updated')
       expect(read).toHaveBeenCalledTimes(2)
-      expect(value(atom)).toBe('default')
+      expect(atom()).toBe('default')
     })
 
     it('restores database context after nested and outer evaluations throw', () => {
@@ -216,18 +198,18 @@ describe('Atom', () => {
       const innerDb = emptyDatabase.with(atom, 'inner')
       const error = new Error('boom')
       const throwing = () => {
-        expect(value(atom)).toBe('inner')
+        expect(atom()).toBe('inner')
         throw error
       }
 
       expect(outerDb.eval(() => {
         expect(() => innerDb.eval(throwing)).toThrow(error)
-        return value(atom)
+        return atom()
       })).toBe('outer')
-      expect(value(atom)).toBe('default')
+      expect(atom()).toBe('default')
 
       expect(() => innerDb.eval(throwing)).toThrow(error)
-      expect(value(atom)).toBe('default')
+      expect(atom()).toBe('default')
     })
 
     it('restores the surrounding database after nested evaluations and errors', () => {
@@ -255,7 +237,7 @@ describe('Atom', () => {
   describe('memoization', () => {
     it('tracks dependencies and invalidates memoized results', () => {
       const count = createAtom(1)
-      const read = vi.fn(() => value(count) * 2)
+      const read = vi.fn(() => count() * 2)
       const doubled = memoize(read)
       const db = emptyDatabase
 
@@ -266,7 +248,7 @@ describe('Atom', () => {
       const nextDb = db.with(count, 3)
       expect(nextDb.eval(doubled)).toBe(6)
       expect(db.eval(doubled)).toBe(2)
-      expect(value(count)).toBe(1)
+      expect(count()).toBe(1)
       expect(read).toHaveBeenCalledTimes(2)
     })
 
@@ -298,6 +280,29 @@ describe('Atom', () => {
       expect(cached()).toBe(1)
       getAtomValue.mockRestore()
     })
+  })
+
+  describe('value compatibility', () => {
+    it('reads defaults and assignments through both APIs without changing snapshots', () => {
+      const count = createAtom<number | undefined>(0)
+      const other = createAtom(0)
+      const db = emptyDatabase.with(count, 10)
+
+      expect(typeof count).toBe('function')
+      expect(count()).toBe(0)
+      expect(value(count)).toBe(0)
+      expect(db.eval(count)).toBe(10)
+      expect(db.evalExpr(expr(count))).toBe(10)
+      expect(db.eval(() => count())).toBe(10)
+      expect(db.eval(value, count)).toBe(10)
+      expect(db.evalExpr(expr(value, count))).toBe(10)
+      expect(db.with(count, undefined).eval(value, count)).toBeUndefined()
+      expect(db.eval(other)).toBe(0)
+      expect(emptyDatabase.eval(count)).toBe(0)
+      expect(count()).toBe(0)
+      expect(value(count)).toBe(0)
+      expect(count.defaultValue).toBe(0)
+    })
 
     it('invalidates memoized computations and errors that mix both read forms', () => {
       const count = createAtom(1)
@@ -320,9 +325,7 @@ describe('Atom', () => {
       expect(() => db.eval(outer)).toThrow(error)
       expect(read).toHaveBeenCalledTimes(2)
     })
-  })
 
-  describe('subscriptions', () => {
     it.each(['watch', 'watchExpr'] as const)('supports %s with callable atoms alongside value subscriptions', method => {
       const count = createAtom(0)
       const unrelated = createAtom(0)

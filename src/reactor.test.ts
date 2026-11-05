@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Reactor } from './reactor';
 import { expr } from './expression';
-import { atom as createAtom, value } from './atom';
+import { atom as createAtom } from './atom';
 import { memoize } from './memoize';
 
 describe('DatabaseReactor', () => {
@@ -14,15 +14,15 @@ describe('DatabaseReactor', () => {
             const name = createAtom('before');
 
             reactor.setMany([count, 10], [name, 'after']);
-            expect(reactor.eval(value, count)).toBe(10);
-            expect(reactor.eval(value, name)).toBe('after');
+            expect(reactor.eval(count)).toBe(10);
+            expect(reactor.eval(name)).toBe('after');
         });
 
         it('notifies a shared dependent once with the completed state', () => {
             const reactor = new Reactor();
             const a = createAtom(1);
             const b = createAtom(2);
-            const sum = () => value(a) + value(b);
+            const sum = () => a() + b();
             const callback = vi.fn(() => reactor.eval(sum));
             reactor.watch(callback, sum);
 
@@ -38,8 +38,8 @@ describe('DatabaseReactor', () => {
             const batch = createAtom(0);
             const beforeCallback = vi.fn();
             const batchCallback = vi.fn();
-            reactor.watch(beforeCallback, value, before);
-            reactor.watch(batchCallback, value, batch);
+            reactor.watch(beforeCallback, before);
+            reactor.watch(batchCallback, batch);
 
             reactor.set(before, 1);
             expect(beforeCallback).toHaveBeenCalledTimes(1);
@@ -59,7 +59,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const atom = createAtom('');
         reactor.set(atom, 'result');
-        const res = reactor.evalExpr(expr(value, atom));
+        const res = reactor.evalExpr(expr(atom));
         expect(res).toBe('result');
     });
 
@@ -88,7 +88,7 @@ describe('DatabaseReactor', () => {
     it('eval tracks dependencies and recomputes after set', () => {
         const reactor = new Reactor();
         const base = createAtom(1);
-        const func = vi.fn((factor: number) => value(base) * factor);
+        const func = vi.fn((factor: number) => base() * factor);
 
         expect(reactor.eval(func, 3)).toBe(3);
         reactor.set(base, 2);
@@ -111,7 +111,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const atom = createAtom(1);
         const other = createAtom(0);
-        const read = () => value(atom) * 2;
+        const read = () => atom() * 2;
         const callback = vi.fn(() => reactor.eval(read));
         const unsubscribe = reactor.watch(callback, read);
 
@@ -130,7 +130,7 @@ describe('DatabaseReactor', () => {
     it('watchExpr tracks memoized cache hits and rearms after reevaluation', () => {
         const reactor = new Reactor();
         const count = createAtom(1);
-        const original = vi.fn(() => value(count) * 2);
+        const original = vi.fn(() => count() * 2);
         const read = memoize(original);
         expect(reactor.eval(read)).toBe(2);
 
@@ -152,7 +152,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const base = createAtom(1);
         const callback = vi.fn();
-        const func = () => value(base) + 1;
+        const func = () => base() + 1;
 
         reactor.watch(callback, func);
         expect(callback).not.toHaveBeenCalled();
@@ -167,7 +167,7 @@ describe('DatabaseReactor', () => {
         const base = createAtom(1);
         const other = createAtom(0);
         const callback = vi.fn();
-        const func = (factor: number) => value(base) * factor;
+        const func = (factor: number) => base() * factor;
         const unsubscribe = reactor.watch(callback, func, 3);
 
         reactor.set(other, 1);
@@ -187,7 +187,7 @@ describe('DatabaseReactor', () => {
         const atom = createAtom('');
         const other = createAtom('');
         const callback = vi.fn();
-        reactor.watchExpr(callback, expr(value, atom));
+        reactor.watchExpr(callback, expr(atom));
         reactor.set(other, 'res');
         expect(callback).not.toHaveBeenCalled();
     });
@@ -197,7 +197,7 @@ describe('DatabaseReactor', () => {
         const atom = createAtom('');
         const cb1 = vi.fn();
         const cb2 = vi.fn();
-        const e = expr(value, atom);
+        const e = expr(atom);
         reactor.watchExpr(cb1, e);
         reactor.watchExpr(cb2, e);
         reactor.set(atom, 'res');
@@ -209,7 +209,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const atom = createAtom('');
         const callback = vi.fn();
-        const e = expr(value, atom);
+        const e = expr(atom);
         const unsubscribe = reactor.watchExpr(callback, e);
         reactor.set(atom, 'res');
         expect(callback).toHaveBeenCalledTimes(1);
@@ -221,7 +221,7 @@ describe('DatabaseReactor', () => {
     it('handles dependent expression notifications: notifies on change, skips duplicates without recompute, resumes after recompute', () => {
         const reactor = new Reactor();
         const base = createAtom(0);
-        const depFunc = (_arg: string) => value(base) + 1;
+        const depFunc = (_arg: string) => base() + 1;
         // Set up base value and create dependency
         reactor.set(base, 10);
         expect(reactor.eval(depFunc, 'key')).toBe(11);
@@ -245,7 +245,7 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const base = createAtom(0);
         const callback = vi.fn();
-        const depFunc = (_arg: string) => value(base) + 1;
+        const depFunc = (_arg: string) => base() + 1;
 
         reactor.set(base, 10);
         reactor.watchExpr(callback, expr(depFunc, 'key'));
@@ -262,9 +262,9 @@ describe('DatabaseReactor', () => {
         const callback = vi.fn(() => reactor.set(other, 1));
         const otherCallback = vi.fn();
         const nestedCallback = vi.fn();
-        reactor.watch(callback, value, atom);
-        reactor.watch(otherCallback, value, atom);
-        reactor.watch(nestedCallback, value, other);
+        reactor.watch(callback, atom);
+        reactor.watch(otherCallback, atom);
+        reactor.watch(nestedCallback, other);
 
         reactor.set(atom, 1);
 
@@ -277,13 +277,13 @@ describe('DatabaseReactor', () => {
         const reactor = new Reactor();
         const atom = createAtom(0);
         const other = createAtom(0);
-        const otherCallback = vi.fn(() => reactor.eval(value, other));
+        const otherCallback = vi.fn(() => reactor.eval(other));
         const callback = vi.fn(() => {
             reactor.set(other, 1);
             expect(otherCallback).toHaveBeenCalledTimes(1);
         });
-        reactor.watch(callback, value, atom);
-        reactor.watch(otherCallback, value, other);
+        reactor.watch(callback, atom);
+        reactor.watch(otherCallback, other);
 
         reactor.set(atom, 1);
 
@@ -292,11 +292,11 @@ describe('DatabaseReactor', () => {
         expect(otherCallback.mock.results[0].value).toBe(1);
     });
 
-    it('notifies separately for consecutive sets of the same expression', () => {
+    it('notifies separately for consecutive sets when the subscription reevaluates', () => {
         const reactor = new Reactor();
         const a = createAtom(0);
-        const callback = vi.fn();
-        reactor.watchExpr(callback, expr(value, a));
+        const callback = vi.fn(() => reactor.eval(a));
+        reactor.watchExpr(callback, expr(a));
         reactor.set(a, 1);
         expect(callback).toHaveBeenCalledTimes(1);
         reactor.set(a, 2);

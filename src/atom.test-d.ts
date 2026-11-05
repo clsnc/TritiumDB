@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { atom, type Atom, emptyDatabase, expr, memoize, Reactor, useEval, useEvalExpr, value } from './index'
+import { atom, type Atom, emptyDatabase, expr, memoize, Reactor, useEval, useEvalExpr } from './index'
 
 describe('atom types', () => {
   it('exports Atom only as a type from both entry points', () => {
@@ -27,9 +27,9 @@ describe('atom types', () => {
     const choice = atom<'yes' | 'no'>('yes')
 
     expectTypeOf(optional).toEqualTypeOf<Atom<string | undefined>>()
-    expectTypeOf(value(optional)).toEqualTypeOf<string | undefined>()
+    expectTypeOf(optional()).toEqualTypeOf<string | undefined>()
     expectTypeOf(choice).toEqualTypeOf<Atom<'yes' | 'no'>>()
-    expectTypeOf(value(choice)).toEqualTypeOf<'yes' | 'no'>()
+    expectTypeOf(choice()).toEqualTypeOf<'yes' | 'no'>()
   })
 
   it('exposes a zero-argument call signature with the atom value type', () => {
