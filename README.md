@@ -18,27 +18,27 @@ Though Atoms can be associated with non-default values, an `Atom` function itsel
 
 ## `Database`
 
-A `Database` is an immutable snapshot of application state. In other words, a given `Database` always has the same value for any given `Atom`. We can check an `Atom`'s value in a `Database` by calling `Database.eval` with the `value` function and the `Atom`. By default, a `Database` has default values for all `Atom`s.
+A `Database` is an immutable snapshot of application state. In other words, a given `Database` always has the same value for any given `Atom`. We can check an `Atom`'s value in a `Database` by passing it to `Database.eval`. By default, a `Database` has default values for all `Atom`s.
 
 ```js
-import { emptyDatabase, value } from 'tritiumdb'
+import { emptyDatabase } from 'tritiumdb'
 
-console.log(emptyDatabase.eval(value, clickCountAtom)) // Output: 0 (clickCountAtom's default value)
+console.log(emptyDatabase.eval(clickCountAtom)) // Output: 0 (clickCountAtom's default value)
 ```
 
 Because `Database` instances are immutable, we must construct a new `Database` to assign a different value to an `Atom`. Notice that even after the new `oneClickDb` has been created, `emptyDatabase` hasn't changed.
 
 ```js
 const oneClickDb = emptyDatabase.with(clickCountAtom, 1)
-console.log(oneClickDb.eval(value, clickCountAtom)) // Output: 1
-console.log(emptyDatabase.eval(value, clickCountAtom)) // Output: 0 (emptyDatabase hasn't changed)
+console.log(oneClickDb.eval(clickCountAtom)) // Output: 1
+console.log(emptyDatabase.eval(clickCountAtom)) // Output: 0 (emptyDatabase hasn't changed)
 ```
 
 A `Database` can also evaluate functions that use its `Atom` values.
 
 ```js
 function multiplyClicks(multiplier) {
-  const numClicks = value(clickCountAtom) // Establish dependency on a Database's clickCountAtom value
+  const numClicks = clickCountAtom() // Establish dependency on a Database's clickCountAtom value
   return numClicks * multiplier
 }
 
@@ -63,7 +63,7 @@ Because a `Database`'s `Atom` values never change, the result of a function eval
 import { memoize } from 'tritiumdb'
 
 const multiplyClicksLoudly = memoize((multiplier) => {
-  const numClicks = value(clickCountAtom) // Establish dependency on a Database's clickCountAtom value
+  const numClicks = clickCountAtom() // Establish dependency on a Database's clickCountAtom value
   console.log(`MULTIPLYING ${numClicks} by ${multiplier}!`)
   return numClicks * multiplier
 })
@@ -89,11 +89,11 @@ We can change a `Reactor`'s value for an `Atom` with `Reactor.set` and `Reactor.
 
 ```js
 reactor.set(clickCountAtom, 10) // Set clickCountAtom's value in this Reactor to 10
-console.log(reactor.eval(value, clickCountAtom)) // Output: 10
+console.log(reactor.eval(clickCountAtom)) // Output: 10
 console.log(reactor.eval(tripleClicks)) // Output: 30
 
 reactor.modify(clickCountAtom, count => count + 1) // Increase clickCountAtom's value in this Reactor by 1
-console.log(reactor.eval(value, clickCountAtom)) // Output: 11
+console.log(reactor.eval(clickCountAtom)) // Output: 11
 console.log(reactor.eval(tripleClicks)) // Output: 33
 ```
 
@@ -115,13 +115,13 @@ reactor.set(clickCountAtom, 16) // No output
 
 ## React
 
-In React, the `useEval` hook subscribes an element to a function call result within a Reactor. Here is a button that increases the click count. Each time it is clicked, `clickCountAtom`'s value is incremented in `reactor`. React is then notified about the possible changes to the results of `value(clickCountAtom)` and `multiplyClicks(4)` so it knows to rerender the `ClickCounter` button.
+In React, the `useEval` hook subscribes an element to a function call result within a Reactor. Here is a button that increases the click count. Each time it is clicked, `clickCountAtom`'s value is incremented in `reactor`. React is then notified about the possible changes to the results of `clickCountAtom()` and `multiplyClicks(4)` so it knows to rerender the `ClickCounter` button.
 
 ```jsx
 import { useEval } from 'tritiumdb'
 
 function ClickCounter() {
-  const numClicks = useEval(reactor, value, clickCountAtom)
+  const numClicks = useEval(reactor, clickCountAtom)
   const quadrupleNumClicks = useEval(reactor, multiplyClicks, 4)
 
   return (
