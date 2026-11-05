@@ -6,6 +6,7 @@
 npm test -- --run                       # run once
 npm test -- src/database.test.ts --run  # single file
 npm run test:types                      # type tests only
+npm run typecheck                       # type-check source, all tests, and Vitest config
 npm run build
 npm run clean
 ```
