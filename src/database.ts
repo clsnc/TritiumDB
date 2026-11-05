@@ -18,6 +18,7 @@ class ExpressionResult {
     constructor(readonly value: Value | Error, readonly isReturnValue: boolean) {}
 }
 
+// TODO: Consider using emptyDatabase instead of null once cache management features are available
 export let activeDatabase: Database | null = null
 
 export class Database {
