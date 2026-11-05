@@ -7,7 +7,9 @@ export interface Atom<T> {
 
 /** Creates an atom with the given default value. */
 export function atom<T>(defaultValue: T): Atom<T> {
-    const read = (): T => value(read)
+    const read = (): T => activeDatabase === null
+        ? read.defaultValue
+        : activeDatabase.spyAtomValue(read)
     read.defaultValue = defaultValue
     return read
 }
@@ -18,7 +20,5 @@ export type AtomAssignments<T extends readonly unknown[]> = {
 }
 
 export function value<T>(atom: Atom<T>): T {
-    return activeDatabase === null
-        ? atom.defaultValue
-        : activeDatabase.spyAtomValue(atom)
+    return atom()
 }
