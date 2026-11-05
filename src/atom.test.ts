@@ -126,14 +126,14 @@ describe('Atom', () => {
 
       const [nextDb, affected] = db.withGetAffectedRels(atom, 4)
       expect(affected.size).toBe(2)
-      expect(affected.has(expr(value, atom))).toBe(true)
+      expect(affected.has(expr(atom))).toBe(true)
       expect(affected.has(expr(triple))).toBe(true)
       expect(nextDb.eval(triple)).toBe(12)
       expect(db.eval(triple)).toBe(6)
       expect(triple).toHaveBeenCalledTimes(4)
     })
 
-    it('uses the existing value dependency key for nested ordinary reads', () => {
+    it('uses the atom itself as the dependency key for nested ordinary reads', () => {
       const count = createAtom(1)
       const multiply = (factor: number) => count() * factor
       const read = () => multiply(3) + count()
@@ -142,9 +142,9 @@ describe('Atom', () => {
       expect(db.eval(read)).toBe(8)
       const [nextDb, affected] = db.withGetAffectedRels(count, 4)
       expect(affected.size).toBe(2)
-      expect(affected.has(expr(value, count))).toBe(true)
+      expect(affected.has(expr(count))).toBe(true)
       expect(affected.has(expr(read))).toBe(true)
-      expect(affected.has(expr(count))).toBe(false)
+      expect(affected.has(expr(value, count))).toBe(false)
       expect(nextDb.eval(read)).toBe(16)
       expect(db.eval(read)).toBe(8)
     })

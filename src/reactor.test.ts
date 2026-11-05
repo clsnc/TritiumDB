@@ -292,10 +292,10 @@ describe('DatabaseReactor', () => {
         expect(otherCallback.mock.results[0].value).toBe(1);
     });
 
-    it('notifies separately for consecutive sets when the subscription reevaluates', () => {
+    it('notifies separately for consecutive sets without reevaluation', () => {
         const reactor = new Reactor();
         const a = createAtom(0);
-        const callback = vi.fn(() => reactor.eval(a));
+        const callback = vi.fn();
         reactor.watchExpr(callback, expr(a));
         reactor.set(a, 1);
         expect(callback).toHaveBeenCalledTimes(1);

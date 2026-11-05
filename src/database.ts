@@ -1,6 +1,6 @@
 import { Map as ImmMap, Set as ImmSet } from "immutable"
 import { Expression, expr } from "./expression"
-import { value, type Atom, type AtomAssignments } from "./atom"
+import type { Atom, AtomAssignments } from "./atom"
 
 export type Value = any
 
@@ -146,12 +146,12 @@ export class Database {
 
     /** @internal Reads an atom's value and tracks it as a dependency of the computing expression. */
     spyAtomValue<T>(atom: Atom<T>): T {
-        this.addDependencyToComputingExpression(expr(value, atom))
+        this.addDependencyToComputingExpression(expr(atom))
         return this.getAtomValue(atom)
     }
 
     protected setAtomValueGetAffectedExprs<T>(atom: Atom<T>, nextValue: T): ImmSet<Expression> {
-        const atomExpr = expr(value, atom)
+        const atomExpr = expr(atom)
         let affectedExprs = this.getAllDependentExprsIncludingSeed(atomExpr)
 
         // Invalidate all affected expressions
@@ -285,7 +285,7 @@ export class Database {
 
     withModifiedGetAffectedRels<T>(atom: Atom<T>, modifier: (oldValue: T) => T): [Database, ImmSet<Expression>] {
         // The new value is the old value with the modifier function applied to it
-        const nextValue = modifier(this.eval(value, atom))
+        const nextValue = modifier(this.eval(atom))
         return this.withGetAffectedRels(atom, nextValue)
     }
 }

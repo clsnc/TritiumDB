@@ -6,7 +6,7 @@ import { Map as ImmMap } from 'immutable'
 import { activeDatabase, Database, emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { memoize } from './memoize'
 import { expr, type Expression } from './expression'
-import { atom as createAtom, value, type Atom } from './atom'
+import { atom as createAtom, type Atom } from './atom'
 
 describe('ReactiveDatabase', () => {
   describe('getAtomValue', () => {
@@ -76,7 +76,7 @@ describe('ReactiveDatabase', () => {
       const [nextDb, affected] = db.withGetAffectedRels(atom, 10)
 
       expect(affected.size).toBe(2)
-      expect(affected.has(expr(value, atom))).toBe(true)
+      expect(affected.has(expr(atom))).toBe(true)
       expect(affected.has(expr(read))).toBe(true)
       expect(nextDb.eval(read)).toBe(20)
       expect(db.eval(read)).toBe(2)
@@ -132,7 +132,7 @@ describe('ReactiveDatabase', () => {
     it('records dependencies for invalidation without resolving them', () => {
       const db = new TestDatabase()
       const atom = createAtom(1)
-      const atomExpr = expr(value, atom)
+      const atomExpr = expr(atom)
       const dependent = vi.fn(() => {
         db.addDependencyToComputingExpression(atomExpr)
         return db.getAtomValue(atom) + 1
@@ -345,7 +345,7 @@ describe('ReactiveDatabase', () => {
       expect(db.eval(memoize(unrelated))).toBe(3)
 
       const [nextDb, affected] = db.withManyGetAffectedRels([a, 10], [b, 20])
-      const expected = [expr(value, a), expr(value, b), expr(left), expr(right), expr(shared), expr(transitive)]
+      const expected = [expr(a), expr(b), expr(left), expr(right), expr(shared), expr(transitive)]
       expect(affected.size).toBe(expected.length)
       for (const expression of expected) expect(affected.has(expression)).toBe(true)
       // Applying the batch must not run any derived computations.
@@ -373,7 +373,7 @@ describe('ReactiveDatabase', () => {
       expect(nextDb.eval(atom)).toBe(20)
       expect(nextDb.eval(dependent)).toBe(21)
       expect(affected.size).toBe(2)
-      expect(affected.has(expr(value, atom))).toBe(true)
+      expect(affected.has(expr(atom))).toBe(true)
       expect(affected.has(expr(dependent))).toBe(true)
       expect(db.eval(dependent)).toBe(1)
     })
@@ -543,8 +543,8 @@ describe('ReactiveDatabase', () => {
 
         // Whether the graph is warm determines which invalidations are expected
         const expectedExprs = warmGraph
-          ? [expr(value, atom), expr(updateLeft ? left : right), expr(combined)]
-          : [expr(value, atom)]
+          ? [expr(atom), expr(updateLeft ? left : right), expr(combined)]
+          : [expr(atom)]
 
         // Check that all expected expressions have been invalidated
         for (const expression of expectedExprs) {
