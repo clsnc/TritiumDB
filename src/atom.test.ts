@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, it, expect, vi } from 'vitest'
-import { atom as createAtom, emptyDatabase, expr, memoize, Reactor, value } from './index'
+import { atom as createAtom, emptyDatabase, expr, memoize } from './index'
 
 describe('Atom', () => {
   describe('defaults and identity', () => {
@@ -144,7 +144,6 @@ describe('Atom', () => {
       expect(affected.size).toBe(2)
       expect(affected.has(expr(count))).toBe(true)
       expect(affected.has(expr(read))).toBe(true)
-      expect(affected.has(expr(value, count))).toBe(false)
       expect(nextDb.eval(read)).toBe(16)
       expect(db.eval(read)).toBe(8)
     })
@@ -279,79 +278,6 @@ describe('Atom', () => {
       expect(db.eval(cached)).toBe(2)
       expect(cached()).toBe(1)
       getAtomValue.mockRestore()
-    })
-  })
-
-  describe('value compatibility', () => {
-    it('reads defaults and assignments through both APIs without changing snapshots', () => {
-      const count = createAtom<number | undefined>(0)
-      const other = createAtom(0)
-      const db = emptyDatabase.with(count, 10)
-
-      expect(typeof count).toBe('function')
-      expect(count()).toBe(0)
-      expect(value(count)).toBe(0)
-      expect(db.eval(count)).toBe(10)
-      expect(db.evalExpr(expr(count))).toBe(10)
-      expect(db.eval(() => count())).toBe(10)
-      expect(db.eval(value, count)).toBe(10)
-      expect(db.evalExpr(expr(value, count))).toBe(10)
-      expect(db.with(count, undefined).eval(value, count)).toBeUndefined()
-      expect(db.eval(other)).toBe(0)
-      expect(emptyDatabase.eval(count)).toBe(0)
-      expect(count()).toBe(0)
-      expect(value(count)).toBe(0)
-      expect(count.defaultValue).toBe(0)
-    })
-
-    it('invalidates memoized computations and errors that mix both read forms', () => {
-      const count = createAtom(1)
-      const error = new Error('negative')
-      const read = vi.fn(() => {
-        const result = count() + value(count)
-        if (result < 0) throw error
-        return result
-      })
-      const cached = memoize(read)
-      const outer = memoize(() => cached() + 1)
-      const db = emptyDatabase.with(count, -1)
-
-      expect(() => db.eval(outer)).toThrow(error)
-      expect(() => db.eval(outer)).toThrow(error)
-      expect(read).toHaveBeenCalledTimes(1)
-      const nextDb = db.with(count, 2)
-      expect(nextDb.eval(outer)).toBe(5)
-      expect(nextDb.eval(outer)).toBe(5)
-      expect(() => db.eval(outer)).toThrow(error)
-      expect(read).toHaveBeenCalledTimes(2)
-    })
-
-    it.each(['watch', 'watchExpr'] as const)('supports %s with callable atoms alongside value subscriptions', method => {
-      const count = createAtom(0)
-      const unrelated = createAtom(0)
-      const reactor = new Reactor()
-      const callback = vi.fn(() => reactor.eval(count))
-      const legacyCallback = vi.fn(() => reactor.eval(value, count))
-      const unsubscribe = method === 'watch'
-        ? reactor.watch(callback, count)
-        : reactor.watchExpr(callback, expr(count))
-      const unsubscribeLegacy = reactor.watch(legacyCallback, value, count)
-
-      reactor.set(unrelated, 10)
-      expect(callback).not.toHaveBeenCalled()
-      expect(legacyCallback).not.toHaveBeenCalled()
-      reactor.set(count, 2)
-      reactor.modify(count, n => n + 1)
-      expect(callback.mock.results.map(result => result.value)).toEqual([2, 3])
-      expect(legacyCallback.mock.results.map(result => result.value)).toEqual([2, 3])
-      expect(reactor.evalExpr(expr(count))).toBe(3)
-
-      unsubscribe()
-      unsubscribeLegacy()
-      reactor.set(count, 4)
-      expect(callback).toHaveBeenCalledTimes(2)
-      expect(legacyCallback).toHaveBeenCalledTimes(2)
-      expect(count()).toBe(0)
     })
   })
 })

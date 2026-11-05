@@ -18,7 +18,3 @@ export function atom<T>(defaultValue: T): Atom<T> {
 export type AtomAssignments<T extends readonly unknown[]> = {
     [K in keyof T]: readonly [Atom<T[K]>, NoInfer<T[K]>]
 }
-
-export function value<T>(atom: Atom<T>): T {
-    return atom()
-}
