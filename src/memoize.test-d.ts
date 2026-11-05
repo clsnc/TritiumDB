@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { Atom, memoize, value } from './index'
+import { atom, memoize, value } from './index'
 
 describe('memoize types', () => {
   it('preserves argument and return types', () => {
@@ -67,13 +67,13 @@ describe('memoize types', () => {
 
     expectTypeOf(wrapped).toExtend<typeof value>()
     expectTypeOf(value).toExtend<typeof wrapped>()
-    expectTypeOf(wrapped(new Atom(0))).toEqualTypeOf<number>()
-    expectTypeOf(wrapped(new Atom(''))).toEqualTypeOf<string>()
-    expectTypeOf(wrapped(new Atom<string | undefined>(undefined)))
+    expectTypeOf(wrapped(atom(0))).toEqualTypeOf<number>()
+    expectTypeOf(wrapped(atom(''))).toEqualTypeOf<string>()
+    expectTypeOf(wrapped(atom<string | undefined>(undefined)))
       .toEqualTypeOf<string | undefined>()
     // @ts-expect-error The argument must be an Atom.
     wrapped(0)
     // @ts-expect-error Explicit type arguments constrain the Atom type.
-    wrapped<number>(new Atom(''))
+    wrapped<number>(atom(''))
   })
 })

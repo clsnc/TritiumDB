@@ -4,6 +4,16 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { atom, type Atom, value } from './index'
 
 describe('atom types', () => {
+  it('exports Atom only as a type from both entry points', () => {
+    type PublicExports = keyof typeof import('./index')
+    type ModuleExports = keyof typeof import('./atom')
+    expectTypeOf<Extract<PublicExports, 'Atom'>>().toEqualTypeOf<never>()
+    expectTypeOf<Extract<ModuleExports, 'Atom'>>().toEqualTypeOf<never>()
+
+    // @ts-expect-error Atom is a type, not a constructor.
+    new Atom(0)
+  })
+
   it('infers value types without restricting primitives to their initial literals', () => {
     expectTypeOf(atom(0)).toEqualTypeOf<Atom<number>>()
     expectTypeOf(atom('')).toEqualTypeOf<Atom<string>>()

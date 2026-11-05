@@ -1,14 +1,14 @@
 // @aiUnreviewed
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { Atom, expr, memoize, Reactor, useEval, useEvalExpr, value } from './index'
+import { atom, expr, memoize, Reactor, useEval, useEvalExpr, value } from './index'
 
 const reactor = new Reactor()
 
 describe('React hook types', () => {
   it('infers atom value types, including undefined', () => {
-    const count = new Atom(0)
-    const optional = new Atom<string | undefined>(undefined)
+    const count = atom(0)
+    const optional = atom<string | undefined>(undefined)
 
     expectTypeOf(useEval(reactor, value, count)).toEqualTypeOf<number>()
     expectTypeOf(useEvalExpr(reactor, expr(value, count))).toEqualTypeOf<number>()

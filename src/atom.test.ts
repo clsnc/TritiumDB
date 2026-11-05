@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { emptyDatabase } from './database'
 import { expr } from './expression'
 import { memoize } from './memoize'
-import { Atom, value } from './atom'
+import { atom as createAtom, value } from './atom'
 import { atom } from './index'
 
 describe('atom', () => {
@@ -58,7 +58,7 @@ describe('atom', () => {
 describe('Atom', () => {
   describe('direct value reads', () => {
     it('returns the default outside evaluation, including after an overridden read', () => {
-      const atom = new Atom('default')
+      const atom = createAtom('default')
       const db = emptyDatabase.with(atom, 'assigned')
 
       expect(value(atom)).toBe('default')
@@ -67,7 +67,7 @@ describe('Atom', () => {
     })
 
     it('reads and tracks atoms through nested ordinary helpers', () => {
-      const atom = new Atom(1)
+      const atom = createAtom(1)
       const multiply = (factor: number) => value(atom) * factor
       const triple = vi.fn(() => multiply(3))
       const db = emptyDatabase.with(atom, 2)
@@ -86,7 +86,7 @@ describe('Atom', () => {
     })
 
     it('returns explicit undefined assignments instead of the default', () => {
-      const atom = new Atom<string | undefined>('default')
+      const atom = createAtom<string | undefined>('default')
       const db = emptyDatabase.with(atom, undefined)
 
       expect(db.eval(() => value(atom))).toBeUndefined()
@@ -94,7 +94,7 @@ describe('Atom', () => {
     })
 
     it('restores and tracks the outer database after a nested evaluation', () => {
-      const atom = new Atom('default')
+      const atom = createAtom('default')
       const outerDb = emptyDatabase.with(atom, 'outer')
       const innerDb = emptyDatabase.with(atom, 'inner')
       const readInner = () => value(atom)
@@ -107,7 +107,7 @@ describe('Atom', () => {
     })
 
     it('restores database context after nested and outer evaluations throw', () => {
-      const atom = new Atom('default')
+      const atom = createAtom('default')
       const outerDb = emptyDatabase.with(atom, 'outer')
       const innerDb = emptyDatabase.with(atom, 'inner')
       const error = new Error('boom')
@@ -129,20 +129,20 @@ describe('Atom', () => {
 
   it('returns the default value when no override is set', () => {
     const db = emptyDatabase
-    const v = new Atom('anonymous')
+    const v = createAtom('anonymous')
 
     expect(db.eval(value, v)).toBe('anonymous')
   })
 
   it('returns the default value outside a computation', () => {
-    const v = new Atom('anonymous')
+    const v = createAtom('anonymous')
 
     expect(value(v)).toBe('anonymous')
   })
 
   it('returns the overridden value in the derived database only', () => {
     const db = emptyDatabase
-    const v = new Atom('anonymous')
+    const v = createAtom('anonymous')
 
     const db2 = db.with(v, 'colson')
 
@@ -152,8 +152,8 @@ describe('Atom', () => {
 
   it('uses reference identity: atoms with equal defaults are independent', () => {
     const db = emptyDatabase
-    const v1 = new Atom('same')
-    const v2 = new Atom('same')
+    const v1 = createAtom('same')
+    const v2 = createAtom('same')
 
     expect(expr(value, v1).equals(expr(value, v1))).toBe(true)
     expect(expr(value, v1).equals(expr(value, v2))).toBe(false)
@@ -165,7 +165,7 @@ describe('Atom', () => {
 
   it('recomputes dependent expressions when overridden', () => {
     const db = emptyDatabase
-    const v = new Atom('anonymous')
+    const v = createAtom('anonymous')
     const greetFunc = vi.fn(() => `hi ${value(v)}`)
 
     expect(db.eval(greetFunc)).toBe('hi anonymous')
@@ -181,8 +181,8 @@ describe('Atom', () => {
 
   it('supports multiple atoms in one computation', () => {
     const db = emptyDatabase
-    const first = new Atom('x')
-    const second = new Atom(1)
+    const first = createAtom('x')
+    const second = createAtom(1)
     const combined = () => `${value(first)}-${value(second)}`
 
     expect(db.eval(combined)).toBe('x-1')

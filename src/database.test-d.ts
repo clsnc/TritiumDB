@@ -2,13 +2,13 @@
 
 import { describe, expectTypeOf, it } from 'vitest'
 import { Map as ImmMap, Set as ImmSet } from 'immutable'
-import { Atom } from './atom'
+import { atom, type Atom } from './atom'
 import { Database, emptyDatabase } from './index'
 import { Expression } from './expression'
 
 const db = emptyDatabase
-const count = new Atom(0)
-const name = new Atom('')
+const count = atom(0)
+const name = atom('')
 
 describe('Database exports', () => {
   it('exports emptyDatabase as a Database', () => {
@@ -34,14 +34,14 @@ describe('Database atom read types', () => {
   it('returns the Atom value type', () => {
     expectTypeOf(db.getAtomValue(count)).toEqualTypeOf<number>()
     expectTypeOf(db.getAtomValue(name)).toEqualTypeOf<string>()
-    expectTypeOf(db.getAtomValue(new Atom<string | undefined>(undefined)))
+    expectTypeOf(db.getAtomValue(atom<string | undefined>(undefined)))
       .toEqualTypeOf<string | undefined>()
   })
 
   it('preserves the Atom value type when tracking reads', () => {
     expectTypeOf(db.spyAtomValue(count)).toEqualTypeOf<number>()
     expectTypeOf(db.spyAtomValue(name)).toEqualTypeOf<string>()
-    expectTypeOf(db.spyAtomValue(new Atom<string | undefined>(undefined)))
+    expectTypeOf(db.spyAtomValue(atom<string | undefined>(undefined)))
       .toEqualTypeOf<string | undefined>()
   })
 })
@@ -69,8 +69,8 @@ describe('Database batch assignment types', () => {
   })
 
   it('accepts optional values and literal unions without widening them', () => {
-    const optional = new Atom<string | undefined>(undefined)
-    const literal = new Atom<'yes' | 'no'>('yes')
+    const optional = atom<string | undefined>(undefined)
+    const literal = atom<'yes' | 'no'>('yes')
     expectTypeOf(db.withMany([optional, undefined], [optional, 'value'], [literal, 'no']))
       .toEqualTypeOf<Database>()
 

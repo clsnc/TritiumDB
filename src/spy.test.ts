@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { emptyDatabase } from './database'
 import { expr } from './expression'
-import { Atom, value } from './atom'
+import { atom, value } from './atom'
 import { spy, spyExpr } from './spy'
 
 describe('spyExpr', () => {
@@ -21,7 +21,7 @@ describe('spyExpr', () => {
   })
 
   it('computations using another database restore the active database afterwards', () => {
-    const base = new Atom<string | undefined>(undefined)
+    const base = atom<string | undefined>(undefined)
     const baseExpr = expr(value, base)
     const db1 = emptyDatabase.with(base, 'db1-value')
     const db2 = emptyDatabase.with(base, 'db2-value')

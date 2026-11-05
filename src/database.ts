@@ -1,6 +1,6 @@
 import { Map as ImmMap, Set as ImmSet } from "immutable"
 import { Expression, expr } from "./expression"
-import { Atom, value, type AtomAssignments } from "./atom"
+import { value, type Atom, type AtomAssignments } from "./atom"
 
 export type Value = any
 

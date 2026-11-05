@@ -1,7 +1,7 @@
 // @aiUnreviewed
 
 import { describe, it, expect, vi } from 'vitest'
-import { Atom, value } from './atom'
+import { atom as createAtom, value } from './atom'
 import { emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { expr } from './expression'
 import { memoize } from './memoize'
@@ -47,7 +47,7 @@ describe('memoize', () => {
   })
 
   it('preserves caching and dependency invalidation after repeated memoization', () => {
-    const count = new Atom(2)
+    const count = createAtom(2)
     const original = vi.fn((factor: number) => value(count) * factor)
     const wrapped = memoize(original)
     const rewrapped = memoize(memoize(wrapped))
@@ -123,7 +123,7 @@ describe('memoize', () => {
   })
 
   it('keeps memoized results independent of bare eval and evalExpr calls', () => {
-    const count = new Atom(2)
+    const count = createAtom(2)
     const original = vi.fn((n: number) => ({ count: value(count) * n }))
     const wrapped = memoize(original)
     const anotherWrapper = memoize(original)
@@ -150,7 +150,7 @@ describe('memoize', () => {
   })
 
   it('keeps memoized errors independent of bare evaluations', () => {
-    const shouldThrow = new Atom(true)
+    const shouldThrow = createAtom(true)
     const original = vi.fn(() => {
       if (value(shouldThrow)) throw new Error('boom')
       return 'recovered'
@@ -188,7 +188,7 @@ describe('memoize', () => {
   it('keeps caches scoped to each database', () => {
     const original = vi.fn(() => ({}))
     const wrapped = memoize(original)
-    const atom = new Atom(0)
+    const atom = createAtom(0)
     // Create both branches before evaluating either so neither inherits this result.
     const firstDb = emptyDatabase.with(atom, 1)
     const secondDb = emptyDatabase.with(atom, 2)
@@ -202,7 +202,7 @@ describe('memoize', () => {
   })
 
   it('tracks transitive dependencies while preserving earlier snapshots', () => {
-    const count = new Atom(1)
+    const count = createAtom(1)
     const original = vi.fn((factor: number) => value(count) * factor)
     const wrapped = memoize(original)
     const outerOriginal = vi.fn(() => wrapped(2) + 1)
@@ -219,7 +219,7 @@ describe('memoize', () => {
   })
 
   it('caches nested errors and invalidates them when dependencies change', () => {
-    const shouldThrow = new Atom(true)
+    const shouldThrow = createAtom(true)
     const error = new Error('boom')
     const original = vi.fn(() => {
       if (value(shouldThrow)) throw error

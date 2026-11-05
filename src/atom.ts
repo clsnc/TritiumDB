@@ -1,8 +1,10 @@
 import { activeDatabase } from './database'
 
-export class Atom<T> {
+class Atom<T> {
     constructor(readonly defaultValue: T) {}
 }
+
+export type { Atom }
 
 /** Creates an atom with the given default value. */
 export function atom<T>(defaultValue: T): Atom<T> {

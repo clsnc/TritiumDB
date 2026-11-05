@@ -1,10 +1,10 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { Atom } from './atom'
+import { atom, type Atom } from './atom'
 import { Reactor } from './reactor'
 
 const reactor = new Reactor()
-const count = new Atom(0)
-const name = new Atom('')
+const count = atom(0)
+const name = atom('')
 
 describe('Reactor batch assignment types', () => {
   it('accepts mutable and readonly tuple spreads and lists', () => {

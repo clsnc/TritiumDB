@@ -1,7 +1,7 @@
 import { Map as ImmutableMap, Set as ImmSet } from "immutable";
 import { Database, emptyDatabase } from './database';
 import { Expression, expr } from './expression';
-import { Atom, type AtomAssignments } from './atom';
+import type { Atom, AtomAssignments } from './atom';
 
 export class Reactor {
     private db: Database;

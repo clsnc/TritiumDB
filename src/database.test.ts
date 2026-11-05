@@ -6,12 +6,12 @@ import { Map as ImmMap } from 'immutable'
 import { activeDatabase, Database, emptyDatabase, RecursiveExpressionComputationError } from './database'
 import { memoize } from './memoize'
 import { expr, type Expression } from './expression'
-import { Atom, value } from './atom'
+import { atom as createAtom, value, type Atom } from './atom'
 
 describe('ReactiveDatabase', () => {
   describe('getAtomValue', () => {
     it('returns the default before and after an evaluation', () => {
-      const atom = new Atom('default')
+      const atom = createAtom('default')
       const db = emptyDatabase
 
       expect(db.getAtomValue(atom)).toBe('default')
@@ -20,8 +20,8 @@ describe('ReactiveDatabase', () => {
     })
 
     it('returns assignments without changing earlier snapshots or other atoms', () => {
-      const atom = new Atom('default')
-      const other = new Atom('default')
+      const atom = createAtom('default')
+      const other = createAtom('default')
       const db = emptyDatabase
       const nextDb = db.with(atom, 'assigned')
 
@@ -31,14 +31,14 @@ describe('ReactiveDatabase', () => {
     })
 
     it('returns an explicit undefined assignment instead of the default', () => {
-      const atom = new Atom<string | undefined>('default')
+      const atom = createAtom<string | undefined>('default')
       const db = emptyDatabase.with(atom, undefined)
 
       expect(db.getAtomValue(atom)).toBeUndefined()
     })
 
     it('returns Error objects assigned as values', () => {
-      const atom = new Atom<Error | null>(null)
+      const atom = createAtom<Error | null>(null)
       const error = new Error('value')
       const db = emptyDatabase.with(atom, error)
 
@@ -46,7 +46,7 @@ describe('ReactiveDatabase', () => {
     })
 
     it('does not treat expression-cache entries as atom assignments', () => {
-      const atom = new Atom(0)
+      const atom = createAtom(0)
       const error = new Error('cached exception')
       const db = new Database(ImmMap(), ImmMap([
         [expr(value, atom), { value: error, isReturnValue: false }],
@@ -58,7 +58,7 @@ describe('ReactiveDatabase', () => {
 
   describe('spyAtomValue', () => {
     it('reads defaults and assignments outside a computation', () => {
-      const atom = new Atom<string | undefined>('default')
+      const atom = createAtom<string | undefined>('default')
       const db = emptyDatabase
 
       expect(db.spyAtomValue(atom)).toBe('default')
@@ -68,7 +68,7 @@ describe('ReactiveDatabase', () => {
     })
 
     it('tracks reads so dependent results are invalidated across snapshots', () => {
-      const atom = new Atom(1)
+      const atom = createAtom(1)
       const db = emptyDatabase
       const read = vi.fn(() => activeDatabase!.spyAtomValue(atom) * 2)
 
@@ -84,7 +84,7 @@ describe('ReactiveDatabase', () => {
     })
 
     it('tracks a dependency before a read throws', () => {
-      const atom = new Atom(0)
+      const atom = createAtom(0)
       const error = new Error('read failed')
       const db = emptyDatabase.with(atom, 0)
       vi.spyOn(db, 'getAtomValue').mockImplementation(() => { throw error })
@@ -131,7 +131,7 @@ describe('ReactiveDatabase', () => {
 
     it('records dependencies for invalidation without resolving them', () => {
       const db = new TestDatabase()
-      const atom = new Atom(1)
+      const atom = createAtom(1)
       const atomExpr = expr(value, atom)
       const dependent = vi.fn(() => {
         db.addDependencyToComputingExpression(atomExpr)
@@ -168,8 +168,8 @@ describe('ReactiveDatabase', () => {
     }
 
     it('stores assignments without populating the computation cache', () => {
-      const atom = new Atom(0)
-      const optional = new Atom<string | undefined>('default')
+      const atom = createAtom(0)
+      const optional = createAtom<string | undefined>('default')
       const db = new TestDatabase()
 
       db.setAtomValueGetAffectedExprs(atom, 42)
@@ -182,7 +182,7 @@ describe('ReactiveDatabase', () => {
 
     it('evaluates ordinary results and errors without populating the computation cache', () => {
       const db = new TestDatabase()
-      const atom = new Atom(3)
+      const atom = createAtom(3)
       const read = vi.fn(() => ({ count: value(atom) }))
       const first = db.eval(read)
       const second = db.evalExpr(expr(read))
@@ -200,8 +200,8 @@ describe('ReactiveDatabase', () => {
     })
 
     it('preserves assignments when memoized computation results are discarded', () => {
-      const atom = new Atom(0)
-      const optional = new Atom<string | undefined>('default')
+      const atom = createAtom(0)
+      const optional = createAtom<string | undefined>('default')
       const db = new TestDatabase()
       db.setAtomValueGetAffectedExprs(atom, 42)
       db.setAtomValueGetAffectedExprs(optional, undefined)
@@ -241,7 +241,7 @@ describe('ReactiveDatabase', () => {
 
     it('executes and tracks dependencies without populating the result cache', () => {
       const db = new TestDatabase()
-      const atom = new Atom(3)
+      const atom = createAtom(3)
       const read = vi.fn((factor: number) => db.spyAtomValue(atom) * factor)
       const expression = expr(read, 2)
 
@@ -268,9 +268,9 @@ describe('ReactiveDatabase', () => {
 
     it('captures errors without caching them and restores the surrounding tracking context', () => {
       const db = new TestDatabase()
-      const innerAtom = new Atom(1)
-      const outerAtom = new Atom(2)
-      const unrelated = new Atom(0)
+      const innerAtom = createAtom(1)
+      const outerAtom = createAtom(2)
+      const unrelated = createAtom(0)
       const error = new Error('boom')
       const inner = vi.fn(() => {
         value(innerAtom)
@@ -315,8 +315,8 @@ describe('ReactiveDatabase', () => {
 
   describe('batch assignments', () => {
     it('sets heterogeneous readonly assignments without changing the original snapshot', () => {
-      const count = new Atom(0)
-      const name = new Atom('default')
+      const count = createAtom(0)
+      const name = createAtom('default')
       const db = emptyDatabase.with(count, 1).with(name, 'before')
       const assignments = [[count, 10], [name, 'after']] as const
       const nextDb = db.withMany(...assignments)
@@ -329,9 +329,9 @@ describe('ReactiveDatabase', () => {
     })
 
     it('unions direct, shared, and transitive invalidations while preserving unrelated caches', () => {
-      const a = new Atom(1)
-      const b = new Atom(2)
-      const other = new Atom(3)
+      const a = createAtom(1)
+      const b = createAtom(2)
+      const other = createAtom(3)
       const left = vi.fn(() => value(a) * 2)
       const right = vi.fn(() => value(b) * 3)
       const memoizedLeft = memoize(left)
@@ -364,7 +364,7 @@ describe('ReactiveDatabase', () => {
     })
 
     it('uses the last duplicate assignment and retains earlier invalidations', () => {
-      const atom = new Atom(0)
+      const atom = createAtom(0)
       const dependent = () => value(atom) + 1
       const db = emptyDatabase
       db.eval(dependent)
@@ -379,7 +379,7 @@ describe('ReactiveDatabase', () => {
     })
 
     it('invalidates dependencies even when assigned values are unchanged', () => {
-      const atom = new Atom(1)
+      const atom = createAtom(1)
       const dependent = vi.fn(() => value(atom) + 1)
       const db = emptyDatabase
       db.eval(dependent)
@@ -408,7 +408,7 @@ describe('ReactiveDatabase', () => {
   })
 
   it('eval delegates to evalExpr and executes on every call', () => {
-    const db = emptyDatabase.with(new Atom(0), 0)
+    const db = emptyDatabase.with(createAtom(0), 0)
     const func = vi.fn((label: string, count: number) => `${label}-${count}`)
     const evalExpr = vi.spyOn(db, 'evalExpr')
 
@@ -482,7 +482,7 @@ describe('ReactiveDatabase', () => {
 
     fc.assert(
       fc.property(atomValue, fc.array(update), (defaultValue, updates) => {
-        const atom = new Atom<string | undefined>(defaultValue)
+        const atom = createAtom<string | undefined>(defaultValue)
         let db = emptyDatabase
         let expectedValue = defaultValue
         const snapshots: [Database, string | undefined][] = [[db, expectedValue]]
@@ -520,8 +520,8 @@ describe('ReactiveDatabase', () => {
     fc.assert(fc.property(
       fc.integer(), fc.integer(), fc.integer(), fc.boolean(), fc.boolean(), fc.boolean(),
       (defaultLeft, defaultRight, operand, updateLeft, modify, warmGraph) => {
-        const leftAtom = new Atom(defaultLeft)
-        const rightAtom = new Atom(defaultRight)
+        const leftAtom = createAtom(defaultLeft)
+        const rightAtom = createAtom(defaultRight)
         const left = () => value(leftAtom) * 2
         const right = () => value(rightAtom) * 3
         const memoizedLeft = memoize(left)
@@ -564,8 +564,8 @@ describe('ReactiveDatabase', () => {
     fc.assert(fc.property(
       fc.integer(), fc.integer(), fc.integer(), fc.boolean(), fc.boolean(),
       (initialLeft, initialRight, operand, updateLeft, modify) => {
-        const leftAtom = new Atom(initialLeft)
-        const rightAtom = new Atom(initialRight)
+        const leftAtom = createAtom(initialLeft)
+        const rightAtom = createAtom(initialRight)
         const left = vi.fn((factor: number) => value(leftAtom) * factor)
         const right = vi.fn((factor: number) => value(rightAtom) * factor)
         const memoizedLeft = memoize(left)
@@ -654,7 +654,7 @@ describe('ReactiveDatabase', () => {
 
   it('invalidates memoized errors when dependencies change', () => {
     const db = emptyDatabase
-    const base = new Atom<string | undefined>(undefined)
+    const base = createAtom<string | undefined>(undefined)
     const throwingFunc = vi.fn(() => {
       const baseValue = value(base)
       if (baseValue === 'bad') {
@@ -690,7 +690,7 @@ describe('ReactiveDatabase', () => {
 
   it('allows dependent predicates to catch errors', () => {
     const db = emptyDatabase
-    const base = new Atom<string | undefined>(undefined)
+    const base = createAtom<string | undefined>(undefined)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
       const baseValue = value(base)
@@ -718,7 +718,7 @@ describe('ReactiveDatabase', () => {
 
   it('propagates errors through dependent expressions', () => {
     const rdb = emptyDatabase
-    const base = new Atom<string | undefined>(undefined)
+    const base = createAtom<string | undefined>(undefined)
     const innerError = new Error('inner')
     const innerFunc = vi.fn(() => {
       const baseValue = value(base)
