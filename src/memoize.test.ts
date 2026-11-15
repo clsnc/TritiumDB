@@ -249,6 +249,46 @@ describe('memoize', () => {
     expect(original).toHaveBeenCalledTimes(2)
   })
 
+  it('memoizes arrow-function class fields that capture this', () => {
+    let calls = 0
+    class Counter {
+      readonly count = createAtom(1)
+      readonly doubled = memoize((factor: number) => {
+        calls++
+        return this.count() * factor
+      })
+    }
+    const counter = new Counter()
+    const db = emptyDatabase
+
+    expect(db.eval(() => counter.doubled(3))).toBe(3)
+    expect(db.eval(() => counter.doubled(3))).toBe(3)
+    expect(calls).toBe(1)
+
+    const nextDb = db.with(counter.count, 5)
+    expect(nextDb.eval(() => counter.doubled(3))).toBe(15)
+    expect(db.eval(() => counter.doubled(3))).toBe(3)
+    expect(calls).toBe(2)
+  })
+
+  it('keeps memoized arrow-function class fields isolated per instance', () => {
+    let calls = 0
+    class Counter {
+      readonly count = createAtom(1)
+      readonly doubled = memoize((factor: number) => {
+        calls++
+        return this.count() * factor
+      })
+    }
+    const first = new Counter()
+    const second = new Counter()
+    const db = emptyDatabase.with(first.count, 2).with(second.count, 5)
+
+    expect(db.eval(() => [first.doubled(3), second.doubled(3)])).toEqual([6, 15])
+    expect(db.eval(() => [first.doubled(3), second.doubled(3)])).toEqual([6, 15])
+    expect(calls).toBe(2)
+  })
+
   it('detects genuine recursion for the original function and arguments', () => {
     const original = (n: number): number => wrapped(n)
     const wrapped = memoize(original)

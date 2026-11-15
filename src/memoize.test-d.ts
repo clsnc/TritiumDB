@@ -79,4 +79,17 @@ describe('memoize types', () => {
     // @ts-expect-error Explicit type arguments constrain the Atom type.
     wrapped<number>(atom(''))
   })
+
+  it('preserves types for memoized arrow-function class fields', () => {
+    class Counter {
+      readonly count = atom(1)
+      readonly doubled = memoize((factor: number) => this.count() * factor)
+    }
+
+    const counter = new Counter()
+    expectTypeOf(counter.doubled).toEqualTypeOf<(factor: number) => number>()
+    expectTypeOf(counter.doubled(2)).toEqualTypeOf<number>()
+    // @ts-expect-error Arguments must match the arrow function's parameter types.
+    counter.doubled('2')
+  })
 })
