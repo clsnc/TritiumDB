@@ -133,3 +133,24 @@ function ClickCounter() {
   )
 }
 ```
+
+## Objects
+
+It is also possible to use class instances and other objects with TritiumDB. Use `Atom`s for properties that may change so that TritiumDB can track those changes. For something like a memoized method, define a memoized arrow-function property.
+
+```js
+class ClickCounter {
+  count = atom(0) // Use an Atom because the number of clicks may change
+
+  // This behaves like a memoized method
+  quadrupled = memoize(() => {
+    return this.count() * 4 // Establish dependency on this instance's count Atom
+  })
+}
+
+const counter = new ClickCounter()
+
+console.log(emptyDatabase.eval(() => counter.quadrupled())) // Output: 0
+const twoClickInstanceDb = emptyDatabase.with(counter.count, 2)
+console.log(twoClickInstanceDb.eval(() => counter.quadrupled())) // Output: 8
+```
